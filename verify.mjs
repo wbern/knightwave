@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
-import {knightDestination} from './src/rules.js';
+import {knightDestination,rotateGrid} from './src/rules.js';
 const gameURL=process.env.KNIGHTWAVE_URL||'http://127.0.0.1:5179/';
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -12,11 +12,14 @@ assert.equal(await page.locator('#orbit').count(),0);
 await page.keyboard.press('ArrowRight');assert.equal((await page.evaluate(()=>window.knightwave.state())).selected,1);
 await page.keyboard.press('ArrowLeft');assert.equal((await page.evaluate(()=>window.knightwave.state())).selected,0);
 await page.waitForTimeout(250);
-const cruise=await page.evaluate(()=>window.knightwave.state());assert.equal(cruise.speed,34);assert.ok(cruise.camera.y<3.2);assert.ok(Math.abs(cruise.knightYaw-Math.PI/2)<.05);
+const cruise=await page.evaluate(()=>window.knightwave.state());assert.equal(cruise.speed,34);assert.ok(cruise.camera.y<4.7);assert.ok(Math.abs(cruise.knightYaw-Math.PI/2)<.05);
 for(let jump=1;jump<=8;jump++){
   await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='air'},jump,{timeout:15000});
   const s=await page.evaluate(()=>window.knightwave.state());
-  const destination=knightDestination(s.target);
+  const overlaps=await page.evaluate(()=>{const {scene,state}=window.knightwave,s=state();const bounds=index=>{const deck=scene.getTransformNodeByName('rainbow road '+index).getChildMeshes().find(m=>m.name==='violet deck');deck.computeWorldMatrix(true);return deck.getBoundingInfo().boundingBox;};const a=bounds(s.jump-1),b=bounds(s.jump);return a.minimumWorld.x<b.maximumWorld.x&&a.maximumWorld.x>b.minimumWorld.x&&a.minimumWorld.z<b.maximumWorld.z&&a.maximumWorld.z>b.minimumWorld.z;});
+  assert.equal(overlaps,false,'Departure and landing roads intersect');
+  const destination=rotateGrid(knightDestination(s.target),s.heading);
+  assert.ok(Math.abs(s.landingHeading-s.heading-s.target*Math.PI/2)<1e-8);
   assert.equal(s.landing.x-s.launch.x,destination.x*s.cellSize);
   assert.equal(s.landing.z-s.launch.z,destination.z*s.cellSize);
   const key=s.target>0?'ArrowRight':'ArrowLeft';for(let i=0;i<Math.abs(s.target);i++)await page.keyboard.press(key);

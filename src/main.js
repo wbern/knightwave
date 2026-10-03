@@ -12,11 +12,10 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import { Layer } from '@babylonjs/core/Layers/layer';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
 import earcut from 'earcut';
-import { knightDestination, isLandingMatch, targetForJump, knightPath, flightPoint } from './rules.js';
+import { knightDestination, isLandingMatch, targetForJump, knightPath, flightPoint, flightHeading, rotateGrid, roadLanding } from './rules.js';
 import { Soundtrack } from './audio.js';
 
 const asset=name=>`${import.meta.env.BASE_URL}${name}`;
@@ -38,7 +37,7 @@ try{engine=new Engine(canvas,true,{preserveDrawingBuffer:false,stencil:true,powe
 engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio||1,2));
 scene.imageProcessingConfiguration.toneMappingEnabled=true;scene.imageProcessingConfiguration.exposure=.85;
 scene.clearColor=new Color4(.028,.014,.07,1);scene.fogMode=Scene.FOGMODE_EXP2;scene.fogColor=new Color3(.08,.025,.16);scene.fogDensity=.004;
-const camera=new FreeCamera('chase',new Vector3(0,7,-15),scene);camera.minZ=.1;camera.maxZ=1200;camera.fov=1.03;
+const camera=new FreeCamera('chase',new Vector3(0,7,-15),scene);camera.minZ=.1;camera.maxZ=1200;camera.fov=.88;
 const hemi=new HemisphericLight('soft light',new Vector3(-.4,1,-.4),scene);hemi.intensity=.65;hemi.diffuse=new Color3(.76,.83,1);hemi.groundColor=new Color3(.25,.08,.43);
 const rim=new PointLight('mint rim',new Vector3(0,8,-4),scene);rim.diffuse=new Color3(.3,1,.83);rim.intensity=.45;rim.range=38;
 const glow=new GlowLayer('neon',scene,{mainTextureRatio:.4,blurKernelSize:32});glow.intensity=.65;
@@ -48,7 +47,8 @@ const roadMats=palette.map((c,i)=>material('rainbow '+i,c,.25));
 const dark=material('underside','#211333',.15),stripe=material('chess tile','#e6cbff',.4),mint=material('mint neon','#8dffe1',1.6),pink=material('pink neon','#fd8bdf',1.5),gold=material('landing gold','#ffe6a3',1.5),white=material('porcelain','#e9fff5',.22),purple=material('mane','#583680',.3);
 
 // Dedicated sky artwork stays behind the 3D course and planets.
-const nebula=new Layer('cosmic artwork',asset('cosmic-sky.png'),scene,true);nebula.color=new Color4(.50,.44,.65,1);
+const sky=MeshBuilder.CreateSphere('world sky',{diameter:1800,segments:32,sideOrientation:Mesh.BACKSIDE},scene);
+const skyMat=new StandardMaterial('cosmic sky',scene);skyMat.disableLighting=true;skyMat.emissiveTexture=new Texture(asset('cosmic-sky.png'),scene);skyMat.emissiveColor=Color3.Black();skyMat.emissiveTexture.level=.55;skyMat.emissiveTexture.wrapU=Texture.MIRROR_ADDRESSMODE;skyMat.emissiveTexture.uScale=4;skyMat.emissiveTexture.wrapV=Texture.MIRROR_ADDRESSMODE;skyMat.emissiveTexture.vScale=3;skyMat.diffuseColor=Color3.Black();sky.material=skyMat;sky.infiniteDistance=true;sky.applyFog=false;sky.isPickable=false;glow.addExcludedMesh(sky);
 let seed=512;
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
 const planet=MeshBuilder.CreateSphere('lavender planet',{diameter:60,segments:32},scene);planet.material=material('planet','#604292',.4);planet.position.set(-92,52,300);
@@ -58,14 +58,41 @@ const halo=MeshBuilder.CreateTorus('moon halo',{diameter:28,thickness:.28,tessel
 const scenery=new TransformNode('cosmos',scene);planet.parent=planetRing.parent=moon.parent=halo.parent=scenery;
 function box(name,w,h,d,x,y,z,mat,parent){const m=MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);m.position.set(x,y,z);m.material=mat;if(parent)m.parent=parent;return m;}
 
-// A shallow, extruded silhouette: deliberately a chess cutout in a 3D world.
+// A slender porcelain chess knight, sculpted for every travel direction.
 const knight=new TransformNode('knight',scene),spinner=new TransformNode('spin',scene);spinner.parent=knight;
-const outline=[[-.65,.16],[.65,.16],[.65,.38],[.43,.55],[.50,.90],[.54,1.35],[.43,1.75],[.22,2.12],[.05,2.50],[-.02,2.95],[-.30,2.75],[-.64,2.88],[-.59,2.52],[-.88,2.22],[-1.12,1.85],[-.93,1.60],[-.51,1.64],[-.20,1.95],[-.12,1.54],[-.31,1.11],[-.52,.77],[-.39,.52],[-.65,.38]];
-function extrude(name,points,depth,mat,parent){const flat=points.flat(),tris=earcut(flat),positions=[],indices=[],n=points.length;for(const z of [-depth/2,depth/2])for(const p of points)positions.push(p[0],p[1],z);for(let i=0;i<tris.length;i+=3){indices.push(tris[i+2],tris[i+1],tris[i],tris[i]+n,tris[i+1]+n,tris[i+2]+n);}for(let i=0;i<n;i++){let j=(i+1)%n;indices.push(i,j,i+n,j,j+n,i+n);}const normals=[];VertexData.ComputeNormals(positions,indices,normals);const v=new VertexData();v.positions=positions;v.indices=indices;v.normals=normals;const m=new Mesh(name,scene);v.applyToMesh(m);m.material=mat;m.parent=parent;return m;}
+function extrude(name,points,depth,mat,parent){const flat=points.flat(),tris=earcut(flat),positions=[],indices=[],n=points.length;for(const z of [-depth/2,depth/2])for(const p of points)positions.push(p[0],p[1],z);for(let i=0;i<tris.length;i+=3){indices.push(tris[i+2],tris[i+1],tris[i],tris[i]+n,tris[i+1]+n,tris[i+2]+n);}for(let i=0;i<n;i++){let j=(i+1)%n;indices.push(i,j,i+n,j,j+n,i+n);}const normals=[];VertexData.ComputeNormals(positions,indices,normals);const v=new VertexData();v.positions=positions;v.indices=indices;v.normals=normals;const m=new Mesh(name,scene);v.applyToMesh(m);m.convertToFlatShadedMesh();m.material=mat;m.parent=parent;return m;}
 const FORWARD_YAW=Math.PI/2;
-const body=extrude('chess knight silhouette',outline,.64,white,spinner);body.position.y=.58;
-const mane=extrude('inlaid purple mane',[[.05,2.48],[.22,2.1],[.44,1.73],[.53,1.35],[.49,.94],[.35,.75],[.33,1.27],[.25,1.69],[-.03,2.17]],.665,purple,spinner);mane.position.y=.58;
-for(const z of [-.345,.345]){const eye=MeshBuilder.CreateSphere('onyx eye',{diameter:.105,segments:8},scene);eye.scaling.z=.35;eye.position.set(-.51,2.70,z);eye.material=purple;eye.parent=spinner;}
+// Sculpted elliptical sections give the horse a readable neck, muzzle and
+// paired ears from the rear camera as well as from the side during a turn.
+function sculpt(name,sections,axis){
+  const sides=32,positions=[],indices=[];
+  for(const [along,cx,cy,rx,ry] of sections)for(let i=0;i<sides;i++){
+    const angle=i/sides*Math.PI*2;
+    if(axis==='vertical')positions.push(cx+Math.cos(angle)*rx,along,cy+Math.sin(angle)*ry);
+    else positions.push(along,cx+Math.cos(angle)*rx,cy+Math.sin(angle)*ry);
+  }
+  for(let row=0;row<sections.length-1;row++)for(let i=0;i<sides;i++){
+    const a=row*sides+i,b=row*sides+(i+1)%sides,c=a+sides,d=b+sides;
+    indices.push(a,b,c,b,d,c);
+  }
+  for(const row of [0,sections.length-1])for(let i=1;i<sides-1;i++){
+    if(row===0)indices.push(row*sides,row*sides+i+1,row*sides+i);
+    else indices.push(row*sides,row*sides+i,row*sides+i+1);
+  }
+  const normals=[];VertexData.ComputeNormals(positions,indices,normals);
+  const data=new VertexData();data.positions=positions;data.indices=indices;data.normals=normals;
+  const mesh=new Mesh(name,scene);data.applyToMesh(mesh);mesh.material=white;mesh.parent=spinner;return mesh;
+}
+const neckSections=[[.65,0,0,.53,.48],[.9,.02,0,.50,.43],[1.25,.08,0,.43,.34],[1.65,.08,0,.36,.29],[2.0,-.03,0,.33,.31],[2.3,-.20,0,.30,.36],[2.55,-.25,0,.27,.37],[2.8,-.22,0,.23,.30],[2.96,-.22,0,.16,.22]];
+sculpt('carved chess knight neck',neckSections,'vertical');
+sculpt('sculpted horse muzzle',[[.15,2.78,0,.23,.28],[-.08,2.82,0,.36,.40],[-.38,2.73,0,.30,.38],[-.68,2.55,0,.22,.32],[-1.0,2.43,0,.17,.28],[-1.10,2.43,0,.12,.21]],'horizontal');
+const manePath=neckSections.slice(1).map(([y,x,z,rx])=>new Vector3(x+rx-.015,y,z));
+const mane=MeshBuilder.CreateTube('carved purple mane',{path:manePath,radius:.085,tessellation:12},scene);mane.material=purple;mane.parent=spinner;
+for(const side of [-1,1]){
+  const ear=MeshBuilder.CreateCylinder('pointed horse ear',{height:.48,diameterBottom:.27,diameterTop:.035,tessellation:12},scene);ear.parent=spinner;ear.material=white;ear.position.set(-.12,3.17,side*.25);ear.rotation.z=.18;ear.rotation.x=side*.16;
+  const eye=MeshBuilder.CreateSphere('onyx eye',{diameter:.12,segments:16},scene);eye.parent=spinner;eye.material=purple;eye.scaling.z=.4;eye.position.set(-.4,2.83,side*.365);
+  const nostril=MeshBuilder.CreateSphere('carved nostril',{diameter:.065,segments:12},scene);nostril.parent=spinner;nostril.material=purple;nostril.scaling.z=.4;nostril.position.set(-1.0,2.48,side*.27);
+}
 // Turned, stepped pedestal and collars make the silhouette unmistakably chess.
 const profile=[[0,0],[1.02,0],[1.06,.10],[1.02,.18],[.86,.21],[.86,.30],[.68,.37],[.61,.48],[.62,.55],[.77,.57],[.77,.66],[.57,.71],[0,.71]].map(([r,y])=>new Vector3(r,y,0));
 const base=MeshBuilder.CreateLathe('turned chess pedestal',{shape:profile,tessellation:64,cap:Mesh.CAP_ALL},scene);base.parent=spinner;base.material=white;
@@ -83,11 +110,11 @@ jumpSparkles.minSize=.16;jumpSparkles.maxSize=.55;jumpSparkles.minLifeTime=.22;j
 jumpSparkles.minEmitPower=2;jumpSparkles.maxEmitPower=5;jumpSparkles.gravity=new Vector3(0,-3,0);
 jumpSparkles.blendMode=ParticleSystem.BLENDMODE_ADD;jumpSparkles.emitRate=0;jumpSparkles.updateSpeed=.012;jumpSparkles.start();
 const burstPieces=[];for(let i=0;i<20;i++){const m=MeshBuilder.CreateSphere('landing sparkle',{diameter:.16,segments:5},scene);m.material=i%2?mint:gold;m.setEnabled(false);burstPieces.push({mesh:m,velocity:new Vector3(),life:0});}
-let roads=[],mode='start',phase='cruise',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,spinAngle=0,visualSpin=0,spinJuice=0,flash=0,toastTimer=0,cruiseStart=0,tapKick=0,gapRoot=null,pathRoot=null,lastGuideKey='';
+let roads=[],mode='start',phase='cruise',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,visualSpin=0,spinJuice=0,flash=0,toastTimer=0,roadProgress=22,airDuration=1.1,viewHeading=0,tapKick=0,gapRoot=null,pathRoot=null,lastGuideKey='';
 let best=0;try{best=Number(localStorage.getItem('knightwave-best')||0);}catch{}
 el('best').textContent=String(best).padStart(5,'0');
-const FLIGHT=1.28,SPEED=34,SCALE=8,ROAD_LENGTH=48;
-function buildRoad(index,x,z,target){const root=new TransformNode('rainbow road '+index,scene),length=ROAD_LENGTH;root.position.set(x,-.12,z+length/2);const start=z,end=z+length;
+const FLIGHT=1.1,SPEED=34,SCALE=8,ROAD_LENGTH=48;
+function buildRoad(index,x,z,target,heading=0){const root=new TransformNode('rainbow road '+index,scene),length=Math.abs(target)===3?SCALE:ROAD_LENGTH;const endOffset=rotateGrid({x:0,z:length},heading),end={x:x+endOffset.x,z:z+endOffset.z};
   box('violet deck',6.4,.32,length+3,0,-.18,-1.5,dark,root);
   roadMats.forEach((m,i)=>box('rainbow ribbon',.86,.10,length+3,(i-3)*.86,0,-1.5,m,root));
   box('left glow rail',.07,.06,length+3,-3.08,.1,-1.5,pink,root);box('right glow rail',.07,.06,length+3,3.08,.1,-1.5,mint,root);
@@ -99,20 +126,49 @@ function buildRoad(index,x,z,target){const root=new TransformNode('rainbow road 
   const arch=MeshBuilder.CreateTube('arched neon',{path:points,radius:.055,tessellation:10},scene);arch.material=index%2?pink:mint;arch.parent=gate;
   const ring=MeshBuilder.CreateTorus('landing circle',{diameter:2.9,thickness:.08,tessellation:48},scene);ring.position.set(0,.13,-length/2);ring.material=gold;ring.parent=root;
   const arrow=extrude('landing chevron',[[-.5,0],[0,.7],[.5,0],[.2,0],[0,.3],[-.2,0]],.03,mint,root);arrow.rotation.x=Math.PI/2;arrow.position.set(0,.10,-length/2+4);
-  const savedPosition=root.position.clone();root.position.setAll(0);root.computeWorldMatrix(true);
+  root.computeWorldMatrix(true);
   for(let rz=-length/2;rz<=length/2;rz+=SCALE)box('square divider',6.0,.02,.04,0,.08,rz,purple,root);
   const decorations=root.getChildMeshes().filter(m=>['chess shimmer','edge stud','square divider'].includes(m.name));
   for(const mat of [tileMaterial,gold,purple]){const group=decorations.filter(m=>m.material===mat);if(group.length>1){const merged=Mesh.MergeMeshes(group,true,true,undefined,false,false);merged.parent=root;merged.position.set(0,0,0);}}
-  root.position.copyFrom(savedPosition);root.computeWorldMatrix(true);
-  return {root,x,start,end,target,index,ring};
+  const center=rotateGrid({x:0,z:length/2},heading);root.position.set(x+center.x,-.05,z+center.z);root.rotation.y=heading;root.computeWorldMatrix(true);
+  return {root,x,z,end,heading,length,target,index,ring};
 }
 const tileMaterial=material('translucent chess squares','#efdbff',.12);tileMaterial.alpha=.21;
-function resetRoads(){roads.forEach(r=>r.root.dispose(false,false));roads=[];roads.push(buildRoad(0,0,-20,0));let x=0;for(let i=0;i<7;i++){let target=targetForJump(i),d=knightDestination(target);x+=d.x*SCALE;roads.push(buildRoad(i+1,x,roads.at(-1).end+d.z*SCALE,target));}}
-function extend(){const last=roads.at(-1),target=targetForJump(last.index),d=knightDestination(target);roads.push(buildRoad(last.index+1,last.x+d.x*SCALE,last.end+d.z*SCALE,target));if(roads.length>11){roads[0].root.dispose(false,false);roads.shift();current--;}}
-resetRoads();knight.position.set(0,.18,4);camera.position.set(12,7,-13);camera.setTarget(new Vector3(1.5,1.4,21));
+function resetRoads(){
+  roads.forEach(r=>r.root.dispose(false,false));roads=[buildRoad(0,0,-20,0)];
+  for(let i=0;i<7;i++){const target=targetForJump(i),p=roadLanding(roads.at(-1),target,SCALE);roads.push(buildRoad(i+1,p.x,p.z,target,p.heading));}
+}
+function extend(){
+  const last=roads.at(-1),target=targetForJump(last.index),p=roadLanding(last,target,SCALE);
+  roads.push(buildRoad(last.index+1,p.x,p.z,target,p.heading));
+  if(roads.length>11){roads[0].root.dispose(false,false);roads.shift();current--;}
+}
+function roadPoint(road,x,z){const p=rotateGrid({x,z},road.heading);return new Vector3(road.x+p.x,.035,road.z+p.z);}
+const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
+function updateCamera(dt,snap=false){
+  const r=roads[current],narrow=window.innerWidth<700;
+  const turnHeading=phase==='air'?flightHeading(selected,Math.min(.999,jumpTime/airDuration+.08)):0;
+  const desiredHeading=r.heading+turnHeading;
+  viewHeading+=wrapAngle(desiredHeading-viewHeading)*(snap?1:1-Math.exp(-dt*12));
+  const forward=new Vector3(Math.sin(viewHeading),0,Math.cos(viewHeading)),right=new Vector3(Math.cos(viewHeading),0,-Math.sin(viewHeading));
+  const distance=narrow?16:13,side=narrow?-3:-3.5;
+  const goal=knight.position.add(forward.scale(-distance)).add(right.scale(side));
+  goal.y=4.1+Math.max(0,knight.position.y-.035)*.55;
+  // Orbit and aim share the same heading; independent position easing causes
+  // the knight to leave the frame during a quick corner.
+  camera.position.copyFrom(goal);
+  const target=knight.position.add(forward.scale(narrow?6:9));target.y=1.25+Math.max(0,knight.position.y-.035)*.30;
+  camera.setTarget(target);
+  camera.rotation.z=0;
+}
+resetRoads();knight.position.set(0,.18,4);
 function visible(id,on){el(id).classList.toggle('hidden',!on);}
 function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode!=='start');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');}
-function start(){resetRoads();current=0;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';spinAngle=visualSpin=0;spinner.rotation.set(0,FORWARD_YAW,0);tapKick=0;jumpSparkles.reset();jumpSparkles.start();knight.position.set(0,.16,2);cruiseStart=2;el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();camera.position.set(-7,2.6,knight.position.z-10);camera.setTarget(new Vector3(0,1.1,knight.position.z+10));}
+function start(){
+  resetRoads();current=0;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';visualSpin=0;viewHeading=0;
+  spinner.rotation.set(0,FORWARD_YAW,0);tapKick=0;jumpSparkles.reset();jumpSparkles.start();roadProgress=22;airDuration=FLIGHT;knight.position.copyFrom(roadPoint(roads[0],0,roadProgress));
+  el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();updateCamera(0,true);
+}
 function toast(title,sub,duration=.9){el('toast').innerHTML=`${title}<small>${sub}</small>`;visible('toast',true);toastTimer=duration;}
 function updateGuides(){
   if(mode!=='playing')return;
@@ -123,10 +179,10 @@ function updateGuides(){
 }
 function turn(dir){
   if(mode!=='playing'||phase==='fall')return;
-  selected+=dir;spinAngle+=dir*Math.PI/2;spinJuice=1;tapKick=dir*.32;
+  selected+=dir;spinJuice=1;tapKick=dir*.32;
   // Apply feedback in the input handler, before the next animation frame.
-  if(phase==='air'){visualSpin+=dir*.80;spinner.rotation.y=FORWARD_YAW+visualSpin;}
-  else{spinner.rotation.y=FORWARD_YAW+tapKick;spinner.rotation.z=-dir*.12;}
+  if(phase==='air'){visualSpin+=dir*.80;spinner.rotation.y=FORWARD_YAW+roads[current].heading+visualSpin;}
+  else{spinner.rotation.y=FORWARD_YAW+roads[current].heading+tapKick;spinner.rotation.z=-dir*.12;}
   audio.spin(selected);updateGuides();
   const button=el(dir<0?'left':'right');button.classList.add('pressed');setTimeout(()=>button.classList.remove('pressed'),90);
 }
@@ -155,7 +211,7 @@ function drawGapGuides(){
   const r=roads[current];
   if(gapRoot?.metadata?.index!==r.index){
     gapRoot?.dispose(false,false);gapRoot=new TransformNode('hollow chess lanes',scene);gapRoot.metadata={index:r.index};
-    gapRoot.position.set(r.x,.015,r.end);
+    gapRoot.position.set(r.end.x,.015,r.end.z);gapRoot.rotation.y=r.heading;
     const lines=[];
     for(let x=-3;x<=3;x++)for(let z=-1;z<=2;z++){
       const cx=x*SCALE,cz=z*SCALE,h=SCALE*.47;
@@ -166,52 +222,49 @@ function drawGapGuides(){
     for(const n of [-3,-2,-1,1,2,3]){
       if(n===roads[current+1].target)continue;
       const d=knightDestination(n),x=d.x*SCALE,z=d.z*SCALE;
-      laneLines.push([new Vector3(x-3,0,z-3),new Vector3(x-3,0,z+28),new Vector3(x+3,0,z+28),new Vector3(x+3,0,z-3),new Vector3(x-3,0,z-3)]);
-      for(let dz=0;dz<=24;dz+=SCALE)laneLines.push([new Vector3(x-3,0,z+dz),new Vector3(x+3,0,z+dz)]);
+      laneLines.push([new Vector3(x-3,0,z-3),new Vector3(x-3,0,z+3),new Vector3(x+3,0,z+3),new Vector3(x+3,0,z-3),new Vector3(x-3,0,z-3)]);
     }
     const lanes=MeshBuilder.CreateLineSystem('possible road outlines',{lines:laneLines},scene);lanes.color=Color3.FromHexString('#ba9bdd');lanes.alpha=.38;lanes.parent=gapRoot;
   }
-  pathRoot?.dispose(false,false);pathRoot=new TransformNode('chosen L trajectory',scene);pathRoot.position.copyFrom(gapRoot.position);
+  pathRoot?.dispose(false,false);pathRoot=new TransformNode('chosen L trajectory',scene);pathRoot.position.copyFrom(gapRoot.position);pathRoot.rotation.y=r.heading;
   const points=(selected===0?[{x:0,z:0},{x:0,z:2}]:knightPath(selected)).map(p=>new Vector3(p.x*SCALE,.045,p.z*SCALE));
   const route=MeshBuilder.CreateTube('knight move trace',{path:points,radius:.035,tessellation:6},scene);route.material=mint;route.parent=pathRoot;
   for(let i=0;i<points.length;i++){const p=points[i];const marker=MeshBuilder.CreateTorus('L corner marker',{diameter:i===points.length-1?1.0:.55,thickness:.055,tessellation:32},scene);marker.material=mint;marker.position.copyFrom(p);marker.parent=pathRoot;}
 }
-function chosenLanding(){const r=roads[current],d=selected===0?{x:0,z:2}:knightDestination(selected);return new Vector3(r.x+d.x*SCALE,.18,r.end+d.z*SCALE);}
+function chosenLanding(){const r=roads[current],d=rotateGrid(selected===0?{x:0,z:2}:knightDestination(selected),r.heading);return new Vector3(r.end.x+d.x*SCALE,.035,r.end.z+d.z*SCALE);}
 function burst(){for(let i=0;i<burstPieces.length;i++){const p=burstPieces[i];p.mesh.position.copyFrom(knight.position);p.mesh.position.y+=.2;p.velocity.set((rand()-.5)*9,rand()*7+2,(rand()-.5)*9);p.life=.7;p.mesh.setEnabled(true);}}
 function update(dt){
   jumpSparkles.emitRate=mode==='playing'&&phase==='air'?210+spinJuice*180:0;
   if(mode==='playing'){
     runTime+=dt;phaseTime+=dt;spinJuice=Math.max(0,spinJuice-dt*4);tapKick*=Math.exp(-dt*14);
     if(phase==='cruise'){
-      const r=roads[current];knight.position.z+=SPEED*Math.min(1.35,1+landings*.012)*dt;knight.position.x=r.x;knight.position.y=.18+Math.sin(runTime*19)*.035;
-      spinner.rotation.y=FORWARD_YAW+tapKick;spinner.rotation.z=-tapKick*.25;spinner.rotation.x=-.045;
-      if(knight.position.z>=r.end){knight.position.z=r.end;phase='air';jumpTime=0;phaseTime=0;visualSpin=0;burst();}
+      const r=roads[current];roadProgress+=SPEED*Math.min(1.35,1+landings*.012)*dt;knight.position.copyFrom(roadPoint(r,0,Math.min(roadProgress,r.length)));knight.position.y=.035+Math.sin(runTime*19)*.012;
+      spinner.rotation.y=FORWARD_YAW+roads[current].heading+tapKick;spinner.rotation.z=-tapKick*.25;spinner.rotation.x=-.045;
+      if(roadProgress>=r.length){phase='air';jumpTime=0;airDuration=FLIGHT+.28*(Math.abs(roads[current+1].target)-1);phaseTime=0;visualSpin=0;burst();}
     }else if(phase==='air'){
-      jumpTime+=dt;const t=Math.min(1,jumpTime/FLIGHT),p=flightPoint(selected,t),r=roads[current];
-      const desiredX=r.x+p.x*SCALE,desiredZ=r.end+p.z*SCALE;
+      jumpTime+=dt;const t=Math.min(1,jumpTime/airDuration),r=roads[current],p=rotateGrid(flightPoint(selected,t),r.heading);
+      const desiredX=r.end.x+p.x*SCALE,desiredZ=r.end.z+p.z*SCALE;
       knight.position.x+=(desiredX-knight.position.x)*Math.min(1,dt*35);knight.position.z+=(desiredZ-knight.position.z)*Math.min(1,dt*35);
-      knight.position.y=.18+Math.sin(t*Math.PI)*3.65+Math.sin(t*Math.PI)*spinJuice*.35;
-      visualSpin+=(spinAngle-visualSpin)*Math.min(1,dt*19);spinner.rotation.y=FORWARD_YAW+visualSpin;
+      knight.position.y=.035+Math.sin(t*Math.PI)*3.65+Math.sin(t*Math.PI)*spinJuice*.35;
+      const motionHeading=flightHeading(selected,t);
+      visualSpin+=wrapAngle(motionHeading-visualSpin)*(1-Math.exp(-dt*24));spinner.rotation.y=FORWARD_YAW+roads[current].heading+visualSpin;
       spinner.rotation.z=Math.sin(t*Math.PI)*.10*Math.sign(selected);spinner.rotation.x=Math.sin(t*Math.PI)*.16;
       if(t===1){
         knight.position.copyFrom(chosenLanding());
         if(isLandingMatch(selected,roads[current+1].target)){
           current++;landings++;combo++;score+=100+combo*25+Math.abs(selected)*10;el('score').textContent=String(score).padStart(5,'0');
           burst();flash=1;audio.land(combo);toast(''+combo+'× flow','+'+(100+combo*25+Math.abs(selected)*10),.55);
-          phase='cruise';phaseTime=0;cruiseStart=knight.position.z;selected=0;spinAngle=visualSpin=0;spinner.rotation.y=FORWARD_YAW;extend();updateGuides();
+          phase='cruise';phaseTime=0;roadProgress=0;selected=0;visualSpin=0;spinner.rotation.y=FORWARD_YAW+roads[current].heading;extend();updateGuides();
         }else{phase='fall';phaseTime=0;combo=0;audio.fall();landingPreview.setEnabled(false);previewBeam.setEnabled(false);}
       }
     }else if(phase==='fall'){knight.position.y-=dt*(5+phaseTime*14);spinner.rotation.z+=dt*1.7;if(phaseTime>1.05)finish();}
     if(phase!=='fall'){
-      const show=phase==='air'||roads[current].end-knight.position.z<36;
+      const show=phase==='air'||roads[current].length-roadProgress<36;
       landingPreview.setEnabled(show);previewBeam.setEnabled(show);gapRoot?.setEnabled(show);pathRoot?.setEnabled(show);
       if(show){const dest=chosenLanding();landingPreview.position.copyFrom(dest);landingPreview.position.y=.04;previewBeam.position.copyFrom(dest);previewBeam.position.y=1.2;landingPreview.scaling.setAll(1+audio.pulse*.06);}
     }
-    const narrow=window.innerWidth<700;
-    const goal=new Vector3(knight.position.x-7,2.6+Math.max(0,knight.position.y-.18)*.75,knight.position.z-(narrow?12:10));
-    Vector3.LerpToRef(camera.position,goal,1-Math.exp(-dt*11),camera.position);
-    camera.setTarget(new Vector3(knight.position.x+(narrow?2.4:2.5),1.15+Math.max(0,knight.position.y-.18)*.65,knight.position.z+(narrow?6:10)));
-    scenery.position.z=knight.position.z*.92;rim.position.set(knight.position.x-2,knight.position.y+5,knight.position.z-3);
+    updateCamera(dt);
+    scenery.position.set(knight.position.x*.9,0,knight.position.z*.9);rim.position.set(knight.position.x-2,knight.position.y+5,knight.position.z-3);
   }else if(mode==='start'){
     const t=performance.now()*.001;knight.position.y=.25+Math.sin(t*2)*.10;spinner.rotation.y=FORWARD_YAW+Math.sin(t*.5)*.035;
     if(window.innerWidth<700&&window.innerHeight>550){camera.position.set(-8,5.8,-10);camera.setTarget(new Vector3(7,3.0,20));}
@@ -219,8 +272,8 @@ function update(dt){
   }
   if(mode==='playing'||mode==='start'){
     glow.intensity=.47+audio.pulse*.10;planetRing.rotation.y+=dt*.03;
-    shadow.position.set(knight.position.x,.01,knight.position.z);shadow.scaling.setAll(Math.max(.4,1-(knight.position.y-.18)*.08));shadow.setEnabled(phase!=='fall');
-    for(const r of roads)r.ring.scaling.setAll(1+Math.sin(runTime*3+r.index)*.05);
+    shadow.position.set(knight.position.x,.005,knight.position.z);shadow.scaling.setAll(Math.max(.4,1-(knight.position.y-.035)*.08));shadow.setEnabled(phase!=='fall');
+    for(const r of roads){r.ring.scaling.setAll(1+Math.sin(runTime*3+r.index)*.05);r.root.setEnabled(mode==='start'?r.index<3:r===roads[current]||r===roads[current+1]);}
     for(const p of burstPieces){if(p.life>0){p.life-=dt;p.mesh.position.addInPlace(p.velocity.scale(dt));p.velocity.y-=dt*13;p.mesh.scaling.setAll(Math.max(0,p.life/.7));if(p.life<=0)p.mesh.setEnabled(false);}}
     if(toastTimer>0){toastTimer-=dt;if(toastTimer<=0)visible('toast',false);}
     flash=Math.max(0,flash-dt*3.5);el('flash').style.opacity=flash*.45;
@@ -228,7 +281,7 @@ function update(dt){
 }
 engine.runRenderLoop(()=>{update(Math.min(engine.getDeltaTime()/1000,.05));scene.render();});
 scene.executeWhenReady(()=>{visible('loading',false);});
-const state=()=>({mode,phase,selected,target:roads[current+1]?.target,jump:landings+1,score,combo,landings,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},takeoff:roads[current]?.end,airtime:jumpTime/FLIGHT,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,speed:SPEED,cellSize:SCALE,launch:{x:roads[current]?.x,z:roads[current]?.end},landing:{x:roads[current+1]?.x,z:roads[current+1]?.start},render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},knightYaw:spinner.rotation.y,sparkles:jumpSparkles.getActiveCount()});
+const state=()=>({mode,phase,selected,target:roads[current+1]?.target,jump:landings+1,score,combo,landings,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},takeoff:Math.max(0,roads[current]?.length-roadProgress),airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,speed:SPEED,cellSize:SCALE,heading:roads[current]?.heading,landingHeading:roads[current+1]?.heading,viewHeading,launch:roads[current]?.end,landing:{x:roads[current+1]?.x,z:roads[current+1]?.z},render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},knightYaw:spinner.rotation.y,sparkles:jumpSparkles.getActiveCount()});
 // Observability for playtesting; actions are the same as keyboard and touch.
 window.knightwave={state,start,turn,pause,resume,mute,engine,scene};
 if(document.modelContext?.registerTool){

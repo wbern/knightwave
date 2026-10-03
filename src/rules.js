@@ -11,6 +11,16 @@ export function knightDestination(steps) {
   return { x, z };
 }
 export const positiveMod = (n, d) => ((n % d) + d) % d;
+// World coordinates for a road's local chess grid. A quarter turn changes
+// both the next road's direction and the coordinate frame of its next jump.
+export function rotateGrid(point, heading) {
+  const c=Math.round(Math.cos(heading)),s=Math.round(Math.sin(heading));
+  return {x:point.x*c+point.z*s||0,z:point.z*c-point.x*s||0};
+}
+export function roadLanding(road, steps, cellSize=8) {
+  const offset=rotateGrid(knightDestination(steps),road.heading);
+  return {x:road.end.x+offset.x*cellSize,z:road.end.z+offset.z*cellSize,heading:road.heading+steps*Math.PI/2};
+}
 export function isLandingMatch(actual, target) {
   const a = knightDestination(actual), b = knightDestination(target);
   return a.x === b.x && a.z === b.z;
@@ -53,4 +63,10 @@ export function flightPoint(steps, progress) {
     distance -= lengths[i];
   }
   return path.at(-1);
+}
+
+export function flightHeading(steps, progress) {
+  const a=flightPoint(steps,Math.max(0,Math.min(1,progress)-.002));
+  const b=flightPoint(steps,Math.min(1,Math.max(0,progress)+.002));
+  return Math.atan2(b.x-a.x,b.z-a.z);
 }
