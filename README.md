@@ -2,6 +2,10 @@
 
 A playable Babylon.js arcade runner: a porcelain chess-knight cutout, floating rainbow chessboard roads, chained L-shaped jump rotations, and an original euphoric 160 BPM soundtrack.
 
+## Open in your browser
+
+[Play Knightwave](https://wbern.github.io/knightwave/). GitHub Pages hosts the game publicly, without a sign-in or local setup. The workflow in `.github/workflows/pages.yml` checks movement rules, builds the game, and publishes changes pushed to `main`.
+
 ## Run
 
 ```sh

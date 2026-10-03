@@ -19,10 +19,11 @@ import earcut from 'earcut';
 import { knightDestination, isLandingMatch, targetForJump } from './rules.js';
 import { Soundtrack } from './audio.js';
 
+const asset=name=>`${import.meta.env.BASE_URL}${name}`;
 const app=document.querySelector('#app');
 app.innerHTML=`<canvas id="world" aria-label="Knightwave neon chess runner"></canvas>
 <div id="ui" class="start-mode">
-  <header class="topbar"><div class="brand"><img class="brand-icon" src="/knight-mark.svg" alt="" width="35" height="35"><div class="brand-name">knightwave<small>AN ARCADE DAYDREAM</small></div></div><div class="stats"><div class="stat"><small>SCORE</small><strong id="score">00000</strong></div><div class="stat"><small>BEST</small><strong id="best">00000</strong></div></div><div class="utility"><button class="icon-button" id="sound" aria-label="Mute soundtrack" title="Sound on/off (M)">♫</button><button class="icon-button hidden" id="pause" aria-label="Pause game" title="Pause (Esc)">Ⅱ</button><button class="icon-button" id="help" aria-label="How to play" title="How to play">?</button></div></header>
+  <header class="topbar"><div class="brand"><img class="brand-icon" src="${asset('knight-mark.svg')}" alt="" width="35" height="35"><div class="brand-name">knightwave<small>AN ARCADE DAYDREAM</small></div></div><div class="stats"><div class="stat"><small>SCORE</small><strong id="score">00000</strong></div><div class="stat"><small>BEST</small><strong id="best">00000</strong></div></div><div class="utility"><button class="icon-button" id="sound" aria-label="Mute soundtrack" title="Sound on/off (M)">♫</button><button class="icon-button hidden" id="pause" aria-label="Pause game" title="Pause (Esc)">Ⅱ</button><button class="icon-button" id="help" aria-label="How to play" title="How to play">?</button></div></header>
   <section class="center-card" id="start-screen"><div class="eyebrow">CHESS MOVES. COSMIC GROOVES.</div><h1>Ride the<span>knightwave.</span></h1><p class="intro">A little chess. A lot of airtime.<br>Spin through the stars and find your<br>way to the next rainbow.</p><button class="primary" id="start">Let’s ride <span>↗</span></button><div class="start-caption">SOUND ON. SHOULDERS DOWN. CHASE THE GLOW.</div></section>
   <div class="run-label hidden" id="run-label">RAINBOW CIRCUIT <span> / </span> <span id="jump-label">JUMP 01</span></div>
   <div class="hint-card hidden" id="hint"><div class="hint-top" id="hint-top">NEXT LANDING</div><div class="hint-main" id="hint-main">→ RIGHT × 1</div><div class="dots" id="dots"></div><div class="air-meter"><span id="air-meter"></span></div><div class="hint-foot" id="hint-foot">Tap once. You can correct in the air.</div></div>
@@ -52,7 +53,7 @@ const dark=material('underside','#211333',.15),stripe=material('chess tile','#e6
 Effect.ShadersStore.skyVertexShader='precision highp float;attribute vec3 position;uniform mat4 worldViewProjection;varying vec3 vPosition;void main(){vPosition=position;gl_Position=worldViewProjection*vec4(position,1.);}';
 Effect.ShadersStore.skyFragmentShader='precision highp float;varying vec3 vPosition;void main(){float h=normalize(vPosition).y;vec3 night=vec3(.024,.017,.085);vec3 violet=vec3(.16,.045,.29);vec3 c=mix(violet,night,smoothstep(-.15,.55,h));gl_FragColor=vec4(c,1.);}';
 const sky=MeshBuilder.CreateSphere('sky',{diameter:1400,segments:16,sideOrientation:Mesh.BACKSIDE},scene);const skyMat=new ShaderMaterial('sky gradient',scene,{vertex:'sky',fragment:'sky'},{attributes:['position'],uniforms:['worldViewProjection']});sky.material=skyMat;sky.infiniteDistance=true;sky.applyFog=false;sky.setEnabled(false);
-const nebula=new Layer('cosmic artwork','/cosmic-sky.png',scene,true);nebula.color=new Color4(.50,.44,.65,1);
+const nebula=new Layer('cosmic artwork',asset('cosmic-sky.png'),scene,true);nebula.color=new Color4(.50,.44,.65,1);
 const starMat=material('starlight','#d7c4ff',1.4);const starPositions=[],starIndices=[];
 let seed=512;
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
