@@ -1,0 +1,9 @@
+{
+  "name": "knightwave",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1", "build": "vite build", "test": "node --test src/rules.test.js" },
+  "dependencies": { "@babylonjs/core": "^9.0.0", "earcut": "^3.0.2" },
+  "devDependencies": { "vite": "^7.3.0", "@playwright/test": "^1.56.0" }
+}
