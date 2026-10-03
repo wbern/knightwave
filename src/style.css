@@ -9,3 +9,9 @@
 @media(pointer:coarse){.touch-controls{display:flex}.start-mode .touch-controls{display:none}}
 @media(max-height:550px){.hint-card{left:25px;top:145px;bottom:auto;transform:none;min-width:210px;padding:10px 13px}.hint-main{font-size:16px}.hint-foot{display:none}.hint-top{font-size:8px}.orbit{right:135px;bottom:18px;width:105px;padding:9px}.touch-controls{bottom:18px}.turn-button{width:70px;height:55px}.toast{top:24%;font-size:23px}.run-label{top:110px}}
 button,canvas{-webkit-tap-highlight-color:transparent}.track-name{background:#120c28b8;border:1px solid #ffffff16;border-radius:10px;padding:10px 13px;backdrop-filter:blur(8px);color:#ded2ec}.track-name small{color:#ae9fc5}
+/* Keep feedback peripheral; the course itself explains where to land. */
+.playing-mode .toast{left:38px;top:145px;transform:none;text-align:left;font-size:20px;white-space:nowrap}.playing-mode .toast small{font-size:10px;letter-spacing:1px}.playing-mode .track-name{display:none}
+@media(max-width:700px){.playing-mode .toast{left:20px;top:130px;font-size:16px}.playing-mode .toast small{font-size:9px}}
+@media(max-height:550px){.playing-mode .toast{top:130px;font-size:16px}}
+
+#app{z-index:0}#ui{z-index:2}.loading{z-index:3}

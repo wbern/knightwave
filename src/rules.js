@@ -20,3 +20,37 @@ export function targetForJump(index, random = Math.random) {
   if (index < tutorial.length) return tutorial[index];
   return (random() > .5 ? 1 : -1) * (1 + Math.floor(random() * 3));
 }
+
+// Every segment lies on the same square grid used by the actual roads.
+export function knightPath(steps) {
+  const count = steps === 0 ? 0 : Math.abs(steps) % 4 || 4;
+  const sign = Math.sign(steps);
+  const legs = [[0, 2, 1, 0], [2, 0, 0, -1], [0, -2, -1, 0], [-2, 0, 0, 1]];
+  const path = [{ x: 0, z: 0 }];
+  let x = 0, z = 0;
+  for (let i = 0; i < count; i++) {
+    const [ax, az, bx, bz] = legs[i];
+    x += ax * sign; z += az; path.push({ x, z });
+    x += bx * sign; z += bz; path.push({ x, z });
+  }
+  return path;
+}
+
+export function flightPoint(steps, progress) {
+  const t = Math.max(0, Math.min(1, progress));
+  // The common opening leg always travels two squares forward. Corrections
+  // can change the remaining turns without changing that visible first leg.
+  if (t <= .42) return { x: 0, z: 2 * t / .42 };
+  if (steps === 0) return { x: 0, z: 2 };
+  const path = knightPath(steps).slice(1);
+  const lengths = path.slice(1).map((p, i) => Math.abs(p.x - path[i].x) + Math.abs(p.z - path[i].z));
+  let distance = (t - .42) / .58 * lengths.reduce((sum, value) => sum + value, 0);
+  for (let i = 0; i < lengths.length; i++) {
+    if (distance <= lengths[i]) {
+      const f = distance / lengths[i];
+      return { x: path[i].x + (path[i + 1].x - path[i].x) * f, z: path[i].z + (path[i + 1].z - path[i].z) * f };
+    }
+    distance -= lengths[i];
+  }
+  return path.at(-1);
+}
