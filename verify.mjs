@@ -1,5 +1,6 @@
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
+import {CELL_SIZE,createCircuit} from './src/board.js';
 import {knightDestination,rotateGrid} from './src/rules.js';
 const url=process.env.KNIGHTWAVE_URL||'http://127.0.0.1:5179/';
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
@@ -19,16 +20,24 @@ try {
     assert.equal(initial.camera.orthographic,true);assert.ok(initial.camera.y>40);
     const press=async dir=>phone?await page.getByRole('button',{name:dir>0?'Rotate knight right':'Rotate knight left'}).tap():await page.keyboard.press(dir>0?'ArrowRight':'ArrowLeft');
     for(let jump=1;jump<=6;jump++){
-      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='ready'},jump);
+      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='cruise'},jump);
       const s=await page.evaluate(()=>window.knightwave.state()),offset=rotateGrid(knightDestination(s.target),s.heading);
       assert.deepEqual(s.camera,initial.camera);
       assert.equal(s.landing.x-s.launch.x,offset.x*s.cellSize);
       assert.equal(s.landing.z-s.launch.z,offset.z*s.cellSize);
       for(let i=0;i<Math.abs(s.target);i++)await press(Math.sign(s.target));
       assert.deepEqual((await page.evaluate(()=>window.knightwave.state())).camera,initial.camera);
+      if(jump===1){
+        assert.equal(s.platforms[1].stage,'target');assert.equal(s.platforms[1].height,.8);
+        await page.waitForTimeout(180);const moving=await page.evaluate(()=>window.knightwave.state());
+        assert.ok(Math.hypot(moving.position.x-s.position.x,moving.position.z-s.position.z)>.5,'Knight must travel during the run-up');
+        assert.ok(moving.platforms[2].height>s.platforms[2].height,'Upcoming platform must rise');
+      }
       if(jump===2){
         await page.getByRole('button',{name:'Pause game'}).click();const paused=await page.evaluate(()=>window.knightwave.state());
         await page.waitForTimeout(180);assert.equal((await page.evaluate(()=>window.knightwave.state())).planning,paused.planning);
+        assert.deepEqual((await page.evaluate(()=>window.knightwave.state())).position,paused.position);
+        assert.deepEqual((await page.evaluate(()=>window.knightwave.state())).platforms,paused.platforms);
         await page.getByRole('button',{name:'Keep riding'}).click();
       }
       await page.waitForFunction(()=>window.knightwave.state().phase==='air');
@@ -43,11 +52,13 @@ try {
       }
       await page.waitForFunction(n=>window.knightwave.state().landings===n,jump,{timeout:6000});
       const landed=await page.evaluate(()=>window.knightwave.state());
-      assert.equal(landed.position.x,s.landing.x);assert.equal(landed.position.z,s.landing.z);
+      assert.equal(landed.lastLanding.x,s.landing.x);assert.equal(landed.lastLanding.z,s.landing.z);
       assert.deepEqual(landed.camera,initial.camera);
+      assert.equal(landed.platforms[jump-1].stage,'falling');
+      if(jump===1){await page.waitForTimeout(180);assert.ok((await page.evaluate(()=>window.knightwave.state())).platforms[0].height<landed.platforms[0].height,'Departed platform must fall');}
     }
     const won=await page.evaluate(()=>window.knightwave.state());assert.equal(won.mode,'won');assert.equal(won.combo,6);
-    assert.deepEqual(won.position,initial.position);
+    const home=createCircuit()[0];assert.deepEqual(won.position,{x:home.x*CELL_SIZE,y:.8+.06,z:home.z*CELL_SIZE});
     await page.waitForTimeout(200);assert.deepEqual((await page.evaluate(()=>window.knightwave.state())).position,won.position);
     await page.screenshot({path:`/tmp/knightwave-${name}-win-final.png`});
     await page.getByRole('button',{name:'Ride again'}).click();assert.equal((await page.evaluate(()=>window.knightwave.state())).score,0);

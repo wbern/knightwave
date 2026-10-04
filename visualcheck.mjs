@@ -27,7 +27,7 @@ try {
             return mesh.getBoundingInfo().boundingBox.vectorsWorld.map(p=>p.constructor.Project(p,identity,game.scene.getTransformMatrix(),viewport));
           });
           const bounds={left:Math.min(...points.map(p=>p.x))/innerWidth,right:Math.max(...points.map(p=>p.x))/innerWidth,top:Math.min(...points.map(p=>p.y))/innerHeight,bottom:Math.max(...points.map(p=>p.y))/innerHeight};
-          const landing=game.scene.getTransformNodeByName('knight').position.clone();landing.set(state.landing.x,.05,state.landing.z);
+          const landing=game.scene.getTransformNodeByName('knight').position.clone();landing.set(state.landing.x,.86,state.landing.z);
           const pad=landing.constructor.Project(landing,identity,game.scene.getTransformMatrix(),viewport);
           const deck=game.scene.getMeshByName('floating board');deck.computeWorldMatrix(true);
           const boardPoints=deck.getBoundingInfo().boundingBox.vectorsWorld.map(p=>p.constructor.Project(p,identity,game.scene.getTransformMatrix(),viewport));
@@ -53,11 +53,12 @@ try {
         if(phone)await page.getByRole('button',{name:target>0?'Rotate knight right':'Rotate knight left'}).tap();
         else await page.keyboard.press(target>0?'ArrowRight':'ArrowLeft');
       }
-      if([1,3,5,6].includes(jump))for(const [label,time] of [['launch',.18],['middle',.52],['landing',.88]]){
+      if([1,2,3,4,5,6].includes(jump))for(const [label,time] of [['launch',.18],['middle',.52],['landing',.88]]){
         await page.waitForFunction(t=>window.knightwave.state().phase==='air'&&window.knightwave.state().airtime>=t,time);
         await capture(`jump-${jump}-${label}`);
       }
       await page.waitForFunction(n=>window.knightwave.state().landings===n,jump,{timeout:6000});
+      if(jump<6){await page.waitForTimeout(140);await capture(`platform-transition-${jump}`);}
       assert.ok(Math.abs(await page.evaluate(()=>{const s=window.knightwave.state();return Math.atan2(Math.sin(s.knightYaw-Math.PI/2-s.heading),Math.cos(s.knightYaw-Math.PI/2-s.heading));}))<.1);
     }
     assert.equal((await page.evaluate(()=>window.knightwave.state())).mode,'won');
