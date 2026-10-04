@@ -22,7 +22,7 @@ try {
         if(state.mode==='playing'&&state.phase!=='fall'){
           const camera=game.scene.activeCamera,viewport=camera.viewport.toGlobal(innerWidth,innerHeight);
           const identity=game.scene.meshes[0].getWorldMatrix().constructor.Identity();
-          const points=game.scene.getTransformNodeByName('knight').getChildMeshes().flatMap(mesh=>{
+          const points=game.scene.getTransformNodeByName('knight').getChildMeshes().filter(mesh=>mesh.isEnabled()).flatMap(mesh=>{
             mesh.computeWorldMatrix(true);
             return mesh.getBoundingInfo().boundingBox.vectorsWorld.map(p=>p.constructor.Project(p,identity,game.scene.getTransformMatrix(),viewport));
           });
@@ -32,9 +32,11 @@ try {
           const deck=game.scene.getMeshByName('floating board');deck.computeWorldMatrix(true);
           const boardPoints=deck.getBoundingInfo().boundingBox.vectorsWorld.map(p=>p.constructor.Project(p,identity,game.scene.getTransformMatrix(),viewport));
           const boardBounds={left:Math.min(...boardPoints.map(p=>p.x))/innerWidth,right:Math.max(...boardPoints.map(p=>p.x))/innerWidth,top:Math.min(...boardPoints.map(p=>p.y))/innerHeight,bottom:Math.max(...boardPoints.map(p=>p.y))/innerHeight};
-          const result={jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
+          const queue=document.getElementById('move-queue').getBoundingClientRect();
+          const overlapsQueue=boardBounds.left*innerWidth<queue.right&&boardBounds.right*innerWidth>queue.left&&boardBounds.top*innerHeight<queue.bottom&&boardBounds.bottom*innerHeight>queue.top;
+          const result={overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
           window.visualAudit.samples.push(result);
-          if(result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
+          if(result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
         }
         requestAnimationFrame(sample);
       }

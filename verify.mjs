@@ -15,9 +15,15 @@ try {
     if(phone)assert.deepEqual((await page.evaluate(()=>window.knightwave.state())).render,{width:780,height:1688});
     await page.getByRole('button',{name:'Let’s ride'}).click();
     assert.equal(await page.locator('#hint, #orbit').count(),0);
+    assert.equal(await page.locator('#queue-track .move-group').count(),6);
+    assert.equal(await page.evaluate(()=>window.knightwave.scene.meshes.some(m=>['complete circuit route','selected knight trace','your landing preview'].includes(m.name))),false);
+    const projected=await page.evaluate(()=>{const game=window.knightwave,camera=game.scene.activeCamera,identity=game.scene.meshes[0].getWorldMatrix().constructor.Identity(),viewport=camera.viewport.toGlobal(innerWidth,innerHeight);return [[-16,-16],[12,-16],[-16,12]].map(([x,z])=>{const point=game.scene.getTransformNodeByName('knight').position.clone();point.set(x,-2,z);const screen=point.constructor.Project(point,identity,game.scene.getTransformMatrix(),viewport);return {x:screen.x,y:screen.y};});});
+    assert.ok(projected[1].x>projected[0].x&&Math.abs(projected[1].y-projected[0].y)<.01);
+    assert.ok(projected[2].y<projected[0].y&&Math.abs(projected[2].x-projected[0].x)<.01);
+    assert.equal(await page.locator('#board-labels span').count(),16);
     const initial=await page.evaluate(()=>window.knightwave.state());
-    assert.deepEqual(initial.board,{radius:4,cells:81,extent:18});
-    assert.equal(initial.camera.orthographic,true);assert.ok(initial.camera.y>40);
+    assert.deepEqual(initial.board,{min:-4,max:3,cells:64,extent:16});
+    assert.equal(initial.camera.orthographic,true);assert.ok(initial.camera.y>40);assert.ok(Math.abs(initial.camera.rotation.x-Math.PI/2)<.00001);
     const press=async dir=>phone?await page.getByRole('button',{name:dir>0?'Rotate knight right':'Rotate knight left'}).tap():await page.keyboard.press(dir>0?'ArrowRight':'ArrowLeft');
     for(let jump=1;jump<=6;jump++){
       await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='cruise'},jump);
@@ -27,6 +33,7 @@ try {
       assert.equal(s.landing.z-s.launch.z,offset.z*s.cellSize);
       for(let i=0;i<Math.abs(s.target);i++)await press(Math.sign(s.target));
       assert.deepEqual((await page.evaluate(()=>window.knightwave.state())).camera,initial.camera);
+      assert.equal(await page.locator('#queued-moves .move-icon').count(),Math.abs(s.target));
       if(jump===1){
         assert.equal(s.platforms[1].stage,'target');assert.equal(s.platforms[1].height,.8);
         await page.waitForTimeout(180);const moving=await page.evaluate(()=>window.knightwave.state());
@@ -54,6 +61,7 @@ try {
       const landed=await page.evaluate(()=>window.knightwave.state());
       assert.equal(landed.lastLanding.x,s.landing.x);assert.equal(landed.lastLanding.z,s.landing.z);
       assert.deepEqual(landed.camera,initial.camera);
+      if(jump<6)assert.equal(await page.locator('#queue-track .move-group:not(.consumed)').count(),6-jump);
       assert.equal(landed.platforms[jump-1].stage,'falling');
       if(jump===1){await page.waitForTimeout(180);assert.ok((await page.evaluate(()=>window.knightwave.state())).platforms[0].height<landed.platforms[0].height,'Departed platform must fall');}
     }

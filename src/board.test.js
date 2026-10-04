@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {BOARD_RADIUS, createCircuit, circuitPath, isOnBoard} from './board.js';
+import {BOARD_MIN, BOARD_MAX, createCircuit, circuitPath, isOnBoard} from './board.js';
 import {flightPoint, rotateGrid} from './rules.js';
 
 test('six chained jumps form a closed circuit with the original facing',()=>{
@@ -20,8 +20,8 @@ test('every landing and intermediate L leg stays inside the finite board',()=>{
       assert.ok(isOnBoard({x:start.launch.x+offset.x,z:start.launch.z+offset.z}));
     }
   }
-  assert.ok(isOnBoard({x:BOARD_RADIUS,z:-BOARD_RADIUS}));
-  assert.ok(!isOnBoard({x:BOARD_RADIUS+.01,z:0}));
+  assert.ok(isOnBoard({x:BOARD_MAX,z:BOARD_MIN}));
+  assert.ok(!isOnBoard({x:BOARD_MAX+.01,z:0}));
 });
 
 test('raised runways do not intersect while upcoming platforms rise',()=>{

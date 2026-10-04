@@ -1,11 +1,14 @@
 import {knightPath,rotateGrid,roadLanding} from './rules.js';
 
-export const BOARD_RADIUS=4;
+export const BOARD_MIN=-4;
+export const BOARD_MAX=3;
+export const BOARD_CELLS=8;
+export const BOARD_CENTER=(BOARD_MIN+BOARD_MAX)/2;
 export const CELL_SIZE=4;
 export const CIRCUIT_TURNS=[1,2,-1,3,-2,-3];
 // Every platform has a one-square run-up; the raised decks never intersect.
 export function createCircuit(){
-  const stops=[{x:0,z:0,heading:0,turns:0}];
+  const stops=[{x:-1,z:0,heading:0,turns:0}];
   for(let i=0;i<=CIRCUIT_TURNS.length;i++){
     const stop=stops[i],offset=rotateGrid({x:0,z:1},stop.heading);
     stop.runLength=1;
@@ -24,5 +27,5 @@ export function circuitPath(start,turns){
   });
 }
 export function isOnBoard(point){
-  return Math.abs(point.x)<=BOARD_RADIUS&&Math.abs(point.z)<=BOARD_RADIUS;
+  return point.x>=BOARD_MIN&&point.x<=BOARD_MAX&&point.z>=BOARD_MIN&&point.z<=BOARD_MAX;
 }
