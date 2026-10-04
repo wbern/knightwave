@@ -10,7 +10,6 @@ export function knightDestination(steps) {
   }
   return { x, z };
 }
-export const positiveMod = (n, d) => ((n % d) + d) % d;
 // World coordinates for a road's local chess grid. A quarter turn changes
 // both the next road's direction and the coordinate frame of its next jump.
 export function rotateGrid(point, heading) {
@@ -25,12 +24,6 @@ export function isLandingMatch(actual, target) {
   const a = knightDestination(actual), b = knightDestination(target);
   return a.x === b.x && a.z === b.z;
 }
-export function targetForJump(index, random = Math.random) {
-  const tutorial = [1, -1, 2, -2, 3, -3];
-  if (index < tutorial.length) return tutorial[index];
-  return (random() > .5 ? 1 : -1) * (1 + Math.floor(random() * 3));
-}
-
 // Every segment lies on the same square grid used by the actual roads.
 export function knightPath(steps) {
   const count = steps === 0 ? 0 : Math.abs(steps) % 4 || 4;

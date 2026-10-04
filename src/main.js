@@ -7,6 +7,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import { Camera } from '@babylonjs/core/Cameras/camera';
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
@@ -14,18 +15,18 @@ import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
-import earcut from 'earcut';
-import { knightDestination, isLandingMatch, targetForJump, knightPath, flightPoint, flightHeading, rotateGrid, roadLanding } from './rules.js';
+import { knightDestination, isLandingMatch, flightPoint, flightHeading, rotateGrid } from './rules.js';
+import { BOARD_RADIUS, CELL_SIZE, createCircuit, circuitPath, isOnBoard } from './board.js';
 import { Soundtrack } from './audio.js';
 
 const asset=name=>`${import.meta.env.BASE_URL}${name}`;
 const app=document.querySelector('#app');
-app.innerHTML=`<canvas id="world" aria-label="Knightwave neon chess runner"></canvas>
+app.innerHTML=`<canvas id="world" aria-label="Knightwave isometric chess circuit"></canvas>
 <div id="ui" class="start-mode">
   <header class="topbar"><div class="brand"><img class="brand-icon" src="${asset('knight-mark.svg')}" alt="" width="35" height="35"><div class="brand-name">knightwave<small>AN ARCADE DAYDREAM</small></div></div><div class="stats"><div class="stat"><small>SCORE</small><strong id="score">00000</strong></div><div class="stat"><small>BEST</small><strong id="best">00000</strong></div></div><div class="utility"><button class="icon-button" id="sound" aria-label="Mute soundtrack" title="Sound on/off (M)">♫</button><button class="icon-button hidden" id="pause" aria-label="Pause game" title="Pause (Esc)">Ⅱ</button><button class="icon-button" id="help" aria-label="How to play" title="How to play">?</button></div></header>
-  <section class="center-card" id="start-screen"><div class="eyebrow">CHESS MOVES. COSMIC GROOVES.</div><h1>Ride the<span>knightwave.</span></h1><p class="intro">A little chess. A lot of airtime.<br>Spin through the stars and find your<br>way to the next rainbow.</p><button class="primary" id="start">Let’s ride <span>↗</span></button><div class="start-caption">SOUND ON. SHOULDERS DOWN. CHASE THE GLOW.</div></section>
-  <div class="run-label hidden" id="run-label">RAINBOW CIRCUIT <span> / </span> <span id="jump-label">JUMP 01</span></div>
-  <div class="toast hidden" id="toast"></div><div class="flash" id="flash"></div>
+  <section class="center-card" id="start-screen"><div class="eyebrow">CHESS MOVES. COSMIC GROOVES.</div><h1>Ride the<span>knightwave.</span></h1><p class="intro">A little chess. A little foresight.<br>Plan your jumps. Follow the glow.<br>Bring your knight back home.</p><button class="primary" id="start">Let’s ride <span>↗</span></button><div class="start-caption">SOUND ON. SHOULDERS DOWN. CHASE THE GLOW.</div></section>
+  <div class="run-label hidden" id="run-label">THE CIRCUIT <span> / </span> <span id="jump-label">JUMP 01</span></div>
+  <div class="flash" id="flash"></div>
   <div class="touch-controls" id="touch-controls"><button class="turn-button" id="left" aria-label="Rotate knight left">↶</button><button class="turn-button" id="right" aria-label="Rotate knight right">↷</button></div>
   <footer class="bottom-bar"><div class="controls-legend"><div class="legend"><span class="keycap">←</span><span class="keycap">→</span> tap to spin</div><div class="legend"><span class="keycap">␣</span> ride / pause</div></div><div class="track-name"><span class="pulse-bars"><i></i><i></i><i></i><i></i></span> Stardust Overdrive<small>ORIGINAL SOUNDTRACK · 160 BPM</small></div></footer>
   <div class="modal-shade hidden" id="modal"></div>
@@ -36,19 +37,19 @@ let engine, scene;
 try{engine=new Engine(canvas,true,{preserveDrawingBuffer:false,stencil:true,powerPreference:'high-performance'});scene=new Scene(engine);}catch(e){el('loading').innerHTML='<div>WebGL is needed to ride the rainbow.<br><small>Try a browser with hardware acceleration enabled.</small></div>';throw e;}
 engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio||1,2));
 scene.imageProcessingConfiguration.toneMappingEnabled=true;scene.imageProcessingConfiguration.exposure=.85;
-scene.clearColor=new Color4(.028,.014,.07,1);scene.fogMode=Scene.FOGMODE_EXP2;scene.fogColor=new Color3(.08,.025,.16);scene.fogDensity=.004;
-const camera=new FreeCamera('chase',new Vector3(0,7,-15),scene);camera.minZ=.1;camera.maxZ=1200;camera.fov=.88;
+scene.clearColor=new Color4(.028,.014,.07,1);scene.fogMode=Scene.FOGMODE_EXP2;scene.fogColor=new Color3(.08,.025,.16);scene.fogDensity=0;
+const camera=new FreeCamera('fixed isometric board',new Vector3(-48,58,-48),scene);camera.minZ=.1;camera.maxZ=1200;camera.mode=Camera.ORTHOGRAPHIC_CAMERA;camera.setTarget(Vector3.Zero());
 const hemi=new HemisphericLight('soft light',new Vector3(-.4,1,-.4),scene);hemi.intensity=.65;hemi.diffuse=new Color3(.76,.83,1);hemi.groundColor=new Color3(.25,.08,.43);
 const rim=new PointLight('mint rim',new Vector3(0,8,-4),scene);rim.diffuse=new Color3(.3,1,.83);rim.intensity=.45;rim.range=38;
 const glow=new GlowLayer('neon',scene,{mainTextureRatio:.4,blurKernelSize:32});glow.intensity=.65;
 function material(name,hex,emission=0){const m=new StandardMaterial(name,scene);m.diffuseColor=Color3.FromHexString(hex);m.emissiveColor=m.diffuseColor.scale(emission);m.specularColor=new Color3(.06,.06,.09);return m;}
 const palette=['#ff72c1','#bf7bff','#8c83ff','#70bdff','#75efee','#a8f9c2','#f8e99c'];
 const roadMats=palette.map((c,i)=>material('rainbow '+i,c,.25));
-const dark=material('underside','#211333',.15),stripe=material('chess tile','#e6cbff',.4),mint=material('mint neon','#8dffe1',1.6),pink=material('pink neon','#fd8bdf',1.5),gold=material('landing gold','#ffe6a3',1.5),white=material('porcelain','#e9fff5',.22),purple=material('mane','#583680',.3);
+const mint=material('mint neon','#8dffe1',1.6),pink=material('pink neon','#fd8bdf',1.5),gold=material('landing gold','#ffb642',.65),white=material('porcelain','#e9fff5',.22),purple=material('mane','#583680',.3);
 
 // Dedicated sky artwork stays behind the 3D course and planets.
 const sky=MeshBuilder.CreateSphere('world sky',{diameter:1800,segments:32,sideOrientation:Mesh.BACKSIDE},scene);
-const skyMat=new StandardMaterial('cosmic sky',scene);skyMat.disableLighting=true;skyMat.emissiveTexture=new Texture(asset('cosmic-sky.png'),scene);skyMat.emissiveColor=Color3.Black();skyMat.emissiveTexture.level=.55;skyMat.emissiveTexture.wrapU=Texture.MIRROR_ADDRESSMODE;skyMat.emissiveTexture.uScale=4;skyMat.emissiveTexture.wrapV=Texture.MIRROR_ADDRESSMODE;skyMat.emissiveTexture.vScale=3;skyMat.diffuseColor=Color3.Black();sky.material=skyMat;sky.infiniteDistance=true;sky.applyFog=false;sky.isPickable=false;glow.addExcludedMesh(sky);
+const skyMat=new StandardMaterial('cosmic sky',scene);skyMat.disableLighting=true;skyMat.emissiveTexture=new Texture(asset('cosmic-sky.png'),scene);skyMat.emissiveColor=Color3.Black();skyMat.emissiveTexture.level=.25;skyMat.emissiveTexture.wrapU=Texture.MIRROR_ADDRESSMODE;skyMat.emissiveTexture.uScale=4;skyMat.emissiveTexture.wrapV=Texture.MIRROR_ADDRESSMODE;skyMat.emissiveTexture.vScale=3;skyMat.diffuseColor=Color3.Black();sky.material=skyMat;sky.infiniteDistance=true;sky.applyFog=false;sky.isPickable=false;glow.addExcludedMesh(sky);
 let seed=512;
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
 const planet=MeshBuilder.CreateSphere('lavender planet',{diameter:60,segments:32},scene);planet.material=material('planet','#604292',.4);planet.position.set(-92,52,300);
@@ -60,7 +61,6 @@ function box(name,w,h,d,x,y,z,mat,parent){const m=MeshBuilder.CreateBox(name,{wi
 
 // A slender porcelain chess knight, sculpted for every travel direction.
 const knight=new TransformNode('knight',scene),spinner=new TransformNode('spin',scene);spinner.parent=knight;
-function extrude(name,points,depth,mat,parent){const flat=points.flat(),tris=earcut(flat),positions=[],indices=[],n=points.length;for(const z of [-depth/2,depth/2])for(const p of points)positions.push(p[0],p[1],z);for(let i=0;i<tris.length;i+=3){indices.push(tris[i+2],tris[i+1],tris[i],tris[i]+n,tris[i+1]+n,tris[i+2]+n);}for(let i=0;i<n;i++){let j=(i+1)%n;indices.push(i,j,i+n,j,j+n,i+n);}const normals=[];VertexData.ComputeNormals(positions,indices,normals);const v=new VertexData();v.positions=positions;v.indices=indices;v.normals=normals;const m=new Mesh(name,scene);v.applyToMesh(m);m.convertToFlatShadedMesh();m.material=mat;m.parent=parent;return m;}
 const FORWARD_YAW=Math.PI/2;
 // Sculpted elliptical sections give the horse a readable neck, muzzle and
 // paired ears from the rear camera as well as from the side during a turn.
@@ -98,7 +98,7 @@ const profile=[[0,0],[1.02,0],[1.06,.10],[1.02,.18],[.86,.21],[.86,.30],[.68,.37
 const base=MeshBuilder.CreateLathe('turned chess pedestal',{shape:profile,tessellation:64,cap:Mesh.CAP_ALL},scene);base.parent=spinner;base.material=white;
 for(const [diameter,y] of [[2.05,.12],[1.55,.61]]){const ring=MeshBuilder.CreateTorus('pedestal inlay',{diameter,thickness:.055,tessellation:64},scene);ring.parent=spinner;ring.position.y=y;ring.material=purple;}
 const baseRing=MeshBuilder.CreateTorus('plinth glow',{diameter:2.02,thickness:.045,tessellation:64},scene);baseRing.parent=spinner;baseRing.position.y=.035;baseRing.material=mint;
-spinner.rotation.y=FORWARD_YAW;
+spinner.rotation.y=FORWARD_YAW;knight.scaling.setAll(1.55);
 const shadow=MeshBuilder.CreateDisc('hover shadow',{radius:1.1,tessellation:30},scene);shadow.rotation.x=Math.PI/2;shadow.material=material('shadow','#170d37',.1);shadow.material.alpha=.38;shadow.position.y=.035;
 const jumpSparkles=new ParticleSystem('jump star glints',500,scene);
 jumpSparkles.particleTexture=new Texture(asset('sparkle.svg'),scene);
@@ -110,178 +110,160 @@ jumpSparkles.minSize=.16;jumpSparkles.maxSize=.55;jumpSparkles.minLifeTime=.22;j
 jumpSparkles.minEmitPower=2;jumpSparkles.maxEmitPower=5;jumpSparkles.gravity=new Vector3(0,-3,0);
 jumpSparkles.blendMode=ParticleSystem.BLENDMODE_ADD;jumpSparkles.emitRate=0;jumpSparkles.updateSpeed=.012;jumpSparkles.start();
 const burstPieces=[];for(let i=0;i<20;i++){const m=MeshBuilder.CreateSphere('landing sparkle',{diameter:.16,segments:5},scene);m.material=i%2?mint:gold;m.setEnabled(false);burstPieces.push({mesh:m,velocity:new Vector3(),life:0});}
-let roads=[],mode='start',phase='cruise',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,visualSpin=0,spinJuice=0,flash=0,toastTimer=0,roadProgress=22,airDuration=1.1,viewHeading=0,tapKick=0,gapRoot=null,pathRoot=null,lastGuideKey='';
-let best=0;try{best=Number(localStorage.getItem('knightwave-best')||0);}catch{}
+const circuit=createCircuit();
+let mode='start',phase='ready',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,visualSpin=0,spinJuice=0,flash=0,airDuration=1.25,tapKick=0,pathRoot=null,lastGuideKey='';
+const READY_TIME=2.25,GROUND=.06;
+let best=0;try{best=Number(localStorage.getItem('knightwave-board-best')||0);}catch{}
 el('best').textContent=String(best).padStart(5,'0');
-const FLIGHT=1.1,SPEED=34,SCALE=8,ROAD_LENGTH=48;
-function buildRoad(index,x,z,target,heading=0){const root=new TransformNode('rainbow road '+index,scene),length=Math.abs(target)===3?SCALE:ROAD_LENGTH;const endOffset=rotateGrid({x:0,z:length},heading),end={x:x+endOffset.x,z:z+endOffset.z};
-  box('violet deck',6.4,.32,length+3,0,-.18,-1.5,dark,root);
-  roadMats.forEach((m,i)=>box('rainbow ribbon',.86,.10,length+3,(i-3)*.86,0,-1.5,m,root));
-  box('left glow rail',.07,.06,length+3,-3.08,.1,-1.5,pink,root);box('right glow rail',.07,.06,length+3,3.08,.1,-1.5,mint,root);
-  for(let row=0;row<Math.floor(length/SCALE);row++){let rz=-length/2+row*SCALE;for(let col=0;col<7;col++){if((row+col)%2===0){const m=box('chess shimmer',.84,.015,SCALE,(col-3)*.86,.059,rz, stripe,root);m.material=tileMaterial;}}}
-  for(let rz=-length/2+3;rz<length/2;rz+=4){box('edge stud',.17,.14,.5,-3.15,.15,rz,gold,root);box('edge stud',.17,.14,.5,3.15,.15,rz,gold,root);}
-  box('takeoff line',6.05,.07,.22,0,.09,length/2-.8,gold,root);
-  const gate=new TransformNode('rainbow arch',scene);gate.parent=root;gate.position.z=length/2-6;
-  const points=[];for(let j=0;j<=36;j++){const a=j/36*Math.PI;points.push(new Vector3(Math.cos(a)*3.55,Math.sin(a)*4.25+.15,0));}
-  const arch=MeshBuilder.CreateTube('arched neon',{path:points,radius:.055,tessellation:10},scene);arch.material=index%2?pink:mint;arch.parent=gate;
-  const ring=MeshBuilder.CreateTorus('landing circle',{diameter:2.9,thickness:.08,tessellation:48},scene);ring.position.set(0,.13,-length/2);ring.material=gold;ring.parent=root;
-  const arrow=extrude('landing chevron',[[-.5,0],[0,.7],[.5,0],[.2,0],[0,.3],[-.2,0]],.03,mint,root);arrow.rotation.x=Math.PI/2;arrow.position.set(0,.10,-length/2+4);
-  root.computeWorldMatrix(true);
-  for(let rz=-length/2;rz<=length/2;rz+=SCALE)box('square divider',6.0,.02,.04,0,.08,rz,purple,root);
-  const decorations=root.getChildMeshes().filter(m=>['chess shimmer','edge stud','square divider'].includes(m.name));
-  for(const mat of [tileMaterial,gold,purple]){const group=decorations.filter(m=>m.material===mat);if(group.length>1){const merged=Mesh.MergeMeshes(group,true,true,undefined,false,false);merged.parent=root;merged.position.set(0,0,0);}}
-  const center=rotateGrid({x:0,z:length/2},heading);root.position.set(x+center.x,-.05,z+center.z);root.rotation.y=heading;root.computeWorldMatrix(true);
-  return {root,x,z,end,heading,length,target,index,ring};
+const board=new TransformNode('finite chessboard',scene),boardWidth=(BOARD_RADIUS*2+1)*CELL_SIZE;
+const frame=material('board frame','#211933',.14);
+box('floating board',boardWidth+1.2,.65,boardWidth+1.2,0,-.43,0,frame,board);
+const cells=[];
+for(let z=-BOARD_RADIUS;z<=BOARD_RADIUS;z++){
+  const hue=Color3.FromHexString(palette[(z+BOARD_RADIUS)%palette.length]);
+  const light=material('light square '+z,'#332a4b',.12),darkTile=material('dark square '+z,'#211c34',.10);
+  light.diffuseColor=Color3.Lerp(light.diffuseColor,hue,.18);darkTile.diffuseColor=Color3.Lerp(darkTile.diffuseColor,hue,.10);
+  for(let x=-BOARD_RADIUS;x<=BOARD_RADIUS;x++){
+    const tile=box('board square',CELL_SIZE-.09,.17,CELL_SIZE-.09,x*CELL_SIZE,-.085,z*CELL_SIZE,(x+z)%2?light:darkTile,board);
+    tile.metadata={x,z};cells.push(tile);
+    box('rainbow tile edge',CELL_SIZE-.20,.012,.035,x*CELL_SIZE,.014,z*CELL_SIZE+CELL_SIZE*.45,roadMats[(z+BOARD_RADIUS)%7],board);
+  }
 }
-const tileMaterial=material('translucent chess squares','#efdbff',.12);tileMaterial.alpha=.21;
-function resetRoads(){
-  roads.forEach(r=>r.root.dispose(false,false));roads=[buildRoad(0,0,-20,0)];
-  for(let i=0;i<7;i++){const target=targetForJump(i),p=roadLanding(roads.at(-1),target,SCALE);roads.push(buildRoad(i+1,p.x,p.z,target,p.heading));}
+for(const side of [-1,1]){
+  box('rainbow board rail',boardWidth+.6,.06,.055,0,.07,side*(boardWidth/2+.28),side<0?pink:mint,board);
+  box('rainbow board rail',.055,.06,boardWidth+.6,side*(boardWidth/2+.28),.07,0,side<0?pink:mint,board);
 }
-function extend(){
-  const last=roads.at(-1),target=targetForJump(last.index),p=roadLanding(last,target,SCALE);
-  roads.push(buildRoad(last.index+1,p.x,p.z,target,p.heading));
-  if(roads.length>11){roads[0].root.dispose(false,false);roads.shift();current--;}
+for(const x of [-1,1])for(const z of [-1,1]){
+  const stud=MeshBuilder.CreateSphere('board corner jewel',{diameter:.32,segments:12},scene);stud.position.set(x*(boardWidth/2+.28),.12,z*(boardWidth/2+.28));stud.material=mint;stud.parent=board;
 }
-function roadPoint(road,x,z){const p=rotateGrid({x,z},road.heading);return new Vector3(road.x+p.x,.035,road.z+p.z);}
-const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
-function updateCamera(dt,snap=false){
-  const r=roads[current],narrow=window.innerWidth<700;
-  const turnHeading=phase==='air'?flightHeading(selected,Math.min(.999,jumpTime/airDuration+.08)):0;
-  const desiredHeading=r.heading+turnHeading;
-  viewHeading+=wrapAngle(desiredHeading-viewHeading)*(snap?1:1-Math.exp(-dt*12));
-  const forward=new Vector3(Math.sin(viewHeading),0,Math.cos(viewHeading)),right=new Vector3(Math.cos(viewHeading),0,-Math.sin(viewHeading));
-  const distance=narrow?16:13,side=narrow?-3:-3.5;
-  const goal=knight.position.add(forward.scale(-distance)).add(right.scale(side));
-  goal.y=4.1+Math.max(0,knight.position.y-.035)*.55;
-  // Orbit and aim share the same heading; independent position easing causes
-  // the knight to leave the frame during a quick corner.
-  camera.position.copyFrom(goal);
-  const target=knight.position.add(forward.scale(narrow?6:9));target.y=1.25+Math.max(0,knight.position.y-.035)*.30;
-  camera.setTarget(target);
-  camera.rotation.z=0;
+const routeLines=[];
+for(let i=1;i<circuit.length;i++)routeLines.push(circuitPath(circuit[i-1],circuit[i].turns).map(p=>new Vector3(p.x*CELL_SIZE,.028,p.z*CELL_SIZE)));
+const route=MeshBuilder.CreateLineSystem('complete circuit route',{lines:routeLines},scene);route.color=Color3.FromHexString('#b49bd8');route.alpha=.35;route.parent=board;
+const markers=circuit.slice(1).map((stop,i)=>{
+  const root=new TransformNode('landing '+(i+1),scene);root.position.set(stop.x*CELL_SIZE,0,stop.z*CELL_SIZE);root.parent=board;
+  const pad=MeshBuilder.CreateCylinder('landing tile',{diameter:3.1,height:.035,tessellation:48},scene);pad.position.y=.04;pad.material=material('landing surface '+i,'#8b7bba',.10);pad.material.alpha=.18;pad.parent=root;
+  const ring=MeshBuilder.CreateTorus('landing ring',{diameter:2.95,thickness:.055,tessellation:48},scene);ring.position.y=.09;ring.material=gold;ring.parent=root;
+  const crystal=MeshBuilder.CreatePolyhedron('landing crystal',{type:1,size:.30},scene);crystal.position.y=.85;crystal.material=gold;crystal.parent=root;
+  return {root,pad,ring,crystal};
+});
+const landingPreview=MeshBuilder.CreateTorus('your landing preview',{diameter:2.4,thickness:.075,tessellation:48},scene);landingPreview.material=mint;landingPreview.setEnabled(false);
+const launchRing=MeshBuilder.CreateTorus('takeoff countdown',{diameter:3.2,thickness:.045,tessellation:48},scene);launchRing.material=mint;launchRing.position.y=.08;launchRing.setEnabled(false);
+const visitedMaterial=material('completed landing','#75efde',.20),missMaterial=material('missed landing','#ff7fa8',.5);
+function worldCell(cell){return new Vector3(cell.x*CELL_SIZE,GROUND,cell.z*CELL_SIZE);}
+function fitBoardCamera(){
+  const width=window.innerWidth,height=window.innerHeight,aspect=width/height,narrow=width<700;
+  const intro=mode==='start';
+  const projectedWidth=(boardWidth+2)*Math.SQRT2,projectedHeight=projectedWidth*.65+8;
+  const availableWidth=intro&&!narrow?.51:.91,availableHeight=height<550?.60:.67;
+  const halfWidth=Math.max(projectedWidth/availableWidth,projectedHeight/availableHeight*aspect)/2;
+  const halfHeight=halfWidth/aspect;
+  const centerX=intro&&!narrow?.72:.5,centerY=intro&&narrow?.74:height<550?.59:.55;
+  const offsetX=(.5-centerX)*2*halfWidth,offsetY=(centerY-.5)*2*halfHeight;
+  camera.orthoLeft=-halfWidth+offsetX;camera.orthoRight=halfWidth+offsetX;
+  camera.orthoTop=halfHeight+offsetY;camera.orthoBottom=-halfHeight+offsetY;
 }
-resetRoads();knight.position.set(0,.18,4);
 function visible(id,on){el(id).classList.toggle('hidden',!on);}
-function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode!=='start');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');}
-function start(){
-  resetRoads();current=0;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';visualSpin=0;viewHeading=0;
-  spinner.rotation.set(0,FORWARD_YAW,0);tapKick=0;jumpSparkles.reset();jumpSparkles.start();roadProgress=22;airDuration=FLIGHT;knight.position.copyFrom(roadPoint(roads[0],0,roadProgress));
-  el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();updateCamera(0,true);
+function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode==='playing'||mode==='paused');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');}
+function updateMarkers(){
+  for(let i=0;i<markers.length;i++){
+    const m=markers[i],completed=i<current,active=i===current;
+    m.root.setEnabled(i!==markers.length-1||current>=3);
+    m.ring.material=completed?visitedMaterial:active?gold:i===current+1?mint:purple;
+    m.ring.visibility=completed?.55:active?1:i===current+1?.65:.28;
+    m.pad.material.alpha=active?.36:completed?.16:.08;
+    m.crystal.setEnabled(!completed);m.crystal.material=active?gold:i===current+1?mint:purple;
+    m.crystal.scaling.setAll(active?1.35:.65);
+  }
 }
-function toast(title,sub,duration=.9){el('toast').innerHTML=`${title}<small>${sub}</small>`;visible('toast',true);toastTimer=duration;}
+function start(){
+  current=0;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='ready';visualSpin=0;
+  spinner.rotation.set(0,FORWARD_YAW,0);tapKick=0;jumpSparkles.reset();jumpSparkles.start();airDuration=1.25;knight.position.copyFrom(worldCell(circuit[0]));
+  el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();updateMarkers();fitBoardCamera();
+}
+function chosenCell(){
+  const origin=circuit[current],offset=rotateGrid(selected===0?{x:0,z:2}:knightDestination(selected),origin.heading);
+  return {x:origin.x+offset.x,z:origin.z+offset.z};
+}
 function updateGuides(){
   if(mode!=='playing')return;
-  el('jump-label').textContent='JUMP '+String(landings+1).padStart(2,'0');
-  const key=roads[current].index+':'+selected;
-  if(key===lastGuideKey)return;lastGuideKey=key;
-  drawGapGuides();
+  el('jump-label').textContent='LANDING '+String(Math.min(landings+1,6)).padStart(2,'0')+' / 06';
+  const key=current+':'+selected;if(key===lastGuideKey)return;lastGuideKey=key;
+  pathRoot?.dispose(false,false);pathRoot=new TransformNode('selected L route',scene);
+  const origin=circuit[current];
+  const points=selected===0?[origin,{x:origin.x+Math.sin(origin.heading)*2,z:origin.z+Math.cos(origin.heading)*2}]:circuitPath(origin,selected);
+  const line=MeshBuilder.CreateTube('selected knight trace',{path:points.map(p=>new Vector3(p.x*CELL_SIZE,.07,p.z*CELL_SIZE)),radius:.045,tessellation:8},scene);line.material=mint;line.parent=pathRoot;
+  for(const p of points){const dot=MeshBuilder.CreateTorus('L corner',{diameter:.35,thickness:.04,tessellation:24},scene);dot.position.set(p.x*CELL_SIZE,.075,p.z*CELL_SIZE);dot.material=mint;dot.parent=pathRoot;}
+  landingPreview.position.copyFrom(worldCell(chosenCell()));landingPreview.position.y=.10;landingPreview.material=isOnBoard(chosenCell())?mint:missMaterial;landingPreview.setEnabled(true);
 }
 function turn(dir){
-  if(mode!=='playing'||phase==='fall')return;
+  if(mode!=='playing'||!['ready','air'].includes(phase))return;
   selected+=dir;spinJuice=1;tapKick=dir*.32;
-  // Apply feedback in the input handler, before the next animation frame.
-  if(phase==='air'){visualSpin+=dir*.80;spinner.rotation.y=FORWARD_YAW+roads[current].heading+visualSpin;}
-  else{spinner.rotation.y=FORWARD_YAW+roads[current].heading+tapKick;spinner.rotation.z=-dir*.12;}
+  if(phase==='air'){visualSpin+=dir*.80;spinner.rotation.y=FORWARD_YAW+circuit[current].heading+visualSpin;}
+  else{spinner.rotation.y=FORWARD_YAW+circuit[current].heading+tapKick;spinner.rotation.z=-dir*.12;}
   audio.spin(selected);updateGuides();
   const button=el(dir<0?'left':'right');button.classList.add('pressed');setTimeout(()=>button.classList.remove('pressed'),90);
 }
+knight.position.copyFrom(worldCell(circuit[0]));updateMarkers();fitBoardCamera();
 function modal(content){el('modal').innerHTML=`<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">${content}</div>`;visible('modal',true);el('modal').querySelector('button')?.focus();}
-function pause(){if(mode==='playing'){setMode('paused');audio.stop();modal('<div class="eyebrow">TAKE A BREATHER</div><h2 id="dialog-title">Still in the groove.</h2><p>Your rainbow will be right here.</p><button class="primary" id="resume">Keep riding <span>↗</span></button><button class="secondary" id="restart">Start a fresh run</button>');el('resume').onclick=resume;el('restart').onclick=start;}else if(mode==='paused')resume();}
+function pause(){if(mode==='playing'){setMode('paused');audio.stop();modal('<div class="eyebrow">TAKE A BREATHER</div><h2 id="dialog-title">Still in the groove.</h2><p>Your circuit will be right here.</p><button class="primary" id="resume">Keep riding <span>↗</span></button><button class="secondary" id="restart">Start a fresh run</button>');el('resume').onclick=resume;el('restart').onclick=start;}else if(mode==='paused')resume();}
 function resume(){visible('modal',false);setMode('playing');audio.start().catch(()=>{});el('world').focus();}
 function help(){const previous=mode;if(mode==='playing'){setMode('paused');audio.stop();}
-  modal('<div class="eyebrow">A KNIGHT TO REMEMBER</div><h2 id="dialog-title">Catch the next road.</h2><div class="how-steps"><span class="number">1</span><p>You cruise and jump automatically. Look for the solid rainbow road among the hollow lanes.</p></div><div class="how-steps"><span class="number">2</span><p>Tap ← or → at any time to choose your next move. On your phone, tap the left or right half of the play area.</p></div><div class="how-steps"><span class="number">3</span><p>Each tap adds a quarter-turn and a rotated knight move: two squares forward, one across. Four turns loop back home.</p></div><div class="how-steps"><span class="number">4</span><p>You can keep tapping in midair. An opposite tap undoes a turn. The mint marker shows your landing.</p></div><button class="primary" id="close-help">Got it <span>↗</span></button>');el('close-help').onclick=()=>{visible('modal',false);if(previous==='playing')resume();};}
-function finish(){setMode('over');if(score>best){best=score;try{localStorage.setItem('knightwave-best',String(best));}catch{}el('best').textContent=String(best).padStart(5,'0');}
-  modal(`<div class="eyebrow">THE STARS WILL WAIT</div><h2 id="dialog-title">One more wave?</h2><p>${landings===0?'The solid road sits two squares forward and one to the right. Tap right at any time before landing.':'You found the rhythm. Let’s take it a little further.'}</p><div class="dialog-stats"><div><strong>${score}</strong><small>YOUR SCORE</small></div><div><strong>${landings}</strong><small>LANDINGS</small></div></div><button class="primary" id="again">Ride again <span>↗</span></button>`);el('again').onclick=start;
+  modal('<div class="eyebrow">A KNIGHT TO REMEMBER</div><h2 id="dialog-title">Plan the whole loop.</h2><div class="how-steps"><span class="number">1</span><p>The whole board stays in view. Reach the gold landing, then follow the next glowing tiles back home.</p></div><div class="how-steps"><span class="number">2</span><p>Jumps launch automatically after a short planning beat. Tap ← or → to choose your next move. On your phone, tap the left or right half of the play area.</p></div><div class="how-steps"><span class="number">3</span><p>Each tap chains a rotated L: two squares forward, one across. The mint route and ring preview your jump. Four taps make a loop.</p></div><div class="how-steps"><span class="number">4</span><p>You can keep tapping in midair. An opposite tap undoes a turn. The mint marker shows your landing.</p></div><button class="primary" id="close-help">Got it <span>↗</span></button>');el('close-help').onclick=()=>{visible('modal',false);if(previous==='playing')resume();};}
+function finish(won=false){
+  setMode(won?'won':'over');jumpSparkles.emitRate=0;landingPreview.setEnabled(false);launchRing.setEnabled(false);pathRoot?.setEnabled(false);
+  if(score>best){best=score;try{localStorage.setItem('knightwave-board-best',String(best));}catch{}el('best').textContent=String(best).padStart(5,'0');}
+  modal(`<div class="eyebrow">${won?'A PERFECT LITTLE LOOP':'THE BOARD WILL WAIT'}</div><h2 id="dialog-title">${won?'Circuit complete.':'One more circuit?'}</h2><p>${won?'Six landings, all the way home. You found your flow.':'Follow the gold tile. Use the mint L to plan your landing, and correct your turn before touchdown.'}</p><div class="dialog-stats"><div><strong>${score}</strong><small>YOUR SCORE</small></div><div><strong>${landings} / 6</strong><small>LANDINGS</small></div></div><button class="primary" id="again">Ride again <span>↗</span></button>`);el('again').onclick=start;
 }
 el('start').onclick=start;el('help').onclick=help;el('pause').onclick=pause;
 function mute(){el('sound').textContent=audio.mute()?'♪̸':'♫';el('sound').setAttribute('aria-label',audio.muted?'Unmute soundtrack':'Mute soundtrack');el('sound').setAttribute('aria-pressed',String(audio.muted));}
 el('sound').onclick=mute;
 for(const [id,d] of [['left',-1],['right',1]])el(id).addEventListener('pointerdown',e=>{e.preventDefault();turn(d);});
 canvas.addEventListener('pointerdown',e=>{if(mode==='playing'){e.preventDefault();turn(e.clientX<window.innerWidth/2?-1:1);}});
-window.addEventListener('keydown',e=>{if(e.target instanceof HTMLButtonElement&&e.code==='Space')return;if(['ArrowLeft','ArrowRight','Space','Escape','KeyA','KeyD'].includes(e.code))e.preventDefault();if(e.repeat)return;if(e.code==='ArrowLeft'||e.code==='KeyA')turn(-1);if(e.code==='ArrowRight'||e.code==='KeyD')turn(1);if(e.code==='KeyM')mute();if(e.code==='Escape'){if(mode==='playing'||mode==='paused'){if(!el('close-help'))pause();else el('close-help').click();}}if(e.code==='Space'){if(mode==='start'||mode==='over')start();else pause();}});
+window.addEventListener('keydown',e=>{if(e.target instanceof HTMLButtonElement&&e.code==='Space')return;if(['ArrowLeft','ArrowRight','Space','Escape','KeyA','KeyD'].includes(e.code))e.preventDefault();if(e.repeat)return;if(e.code==='ArrowLeft'||e.code==='KeyA')turn(-1);if(e.code==='ArrowRight'||e.code==='KeyD')turn(1);if(e.code==='KeyM')mute();if(e.code==='Escape'){if(mode==='playing'||mode==='paused'){if(!el('close-help'))pause();else el('close-help').click();}}if(e.code==='Space'){if(mode==='start'||mode==='over'||mode==='won')start();else pause();}});
 // Trap modal focus so keyboard play and pause stay predictable.
 el('modal').addEventListener('keydown',e=>{if(e.key==='Tab'){const buttons=[...el('modal').querySelectorAll('button')];if(buttons.length===1){e.preventDefault();buttons[0].focus();}else if(e.shiftKey&&document.activeElement===buttons[0]){e.preventDefault();buttons.at(-1).focus();}else if(!e.shiftKey&&document.activeElement===buttons.at(-1)){e.preventDefault();buttons[0].focus();}}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='playing')pause();});
-window.addEventListener('resize',()=>{engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio||1,2));engine.resize();});
-const landingPreview=MeshBuilder.CreateTorus('your landing preview',{diameter:2.5,thickness:.095,tessellation:44},scene);landingPreview.material=mint;landingPreview.setEnabled(false);
-const previewBeam=MeshBuilder.CreateCylinder('landing beam',{diameter:.08,height:3,tessellation:8},scene);previewBeam.material=mint;previewBeam.material.alpha=.45;previewBeam.setEnabled(false);
-const ghostColor=Color3.FromHexString('#977fba');
-function drawGapGuides(){
-  const r=roads[current];
-  if(gapRoot?.metadata?.index!==r.index){
-    gapRoot?.dispose(false,false);gapRoot=new TransformNode('hollow chess lanes',scene);gapRoot.metadata={index:r.index};
-    gapRoot.position.set(r.end.x,.015,r.end.z);gapRoot.rotation.y=r.heading;
-    const lines=[];
-    for(let x=-3;x<=3;x++)for(let z=-1;z<=2;z++){
-      const cx=x*SCALE,cz=z*SCALE,h=SCALE*.47;
-      lines.push([new Vector3(cx-h,0,cz-h),new Vector3(cx+h,0,cz-h),new Vector3(cx+h,0,cz+h),new Vector3(cx-h,0,cz+h),new Vector3(cx-h,0,cz-h)]);
-    }
-    const grid=MeshBuilder.CreateLineSystem('empty chess squares',{lines},scene);grid.color=ghostColor;grid.alpha=.25;grid.parent=gapRoot;
-    const laneLines=[];
-    for(const n of [-3,-2,-1,1,2,3]){
-      if(n===roads[current+1].target)continue;
-      const d=knightDestination(n),x=d.x*SCALE,z=d.z*SCALE;
-      laneLines.push([new Vector3(x-3,0,z-3),new Vector3(x-3,0,z+3),new Vector3(x+3,0,z+3),new Vector3(x+3,0,z-3),new Vector3(x-3,0,z-3)]);
-    }
-    const lanes=MeshBuilder.CreateLineSystem('possible road outlines',{lines:laneLines},scene);lanes.color=Color3.FromHexString('#ba9bdd');lanes.alpha=.38;lanes.parent=gapRoot;
-  }
-  pathRoot?.dispose(false,false);pathRoot=new TransformNode('chosen L trajectory',scene);pathRoot.position.copyFrom(gapRoot.position);pathRoot.rotation.y=r.heading;
-  const points=(selected===0?[{x:0,z:0},{x:0,z:2}]:knightPath(selected)).map(p=>new Vector3(p.x*SCALE,.045,p.z*SCALE));
-  const route=MeshBuilder.CreateTube('knight move trace',{path:points,radius:.035,tessellation:6},scene);route.material=mint;route.parent=pathRoot;
-  for(let i=0;i<points.length;i++){const p=points[i];const marker=MeshBuilder.CreateTorus('L corner marker',{diameter:i===points.length-1?1.0:.55,thickness:.055,tessellation:32},scene);marker.material=mint;marker.position.copyFrom(p);marker.parent=pathRoot;}
-}
-function chosenLanding(){const r=roads[current],d=rotateGrid(selected===0?{x:0,z:2}:knightDestination(selected),r.heading);return new Vector3(r.end.x+d.x*SCALE,.035,r.end.z+d.z*SCALE);}
-function burst(){for(let i=0;i<burstPieces.length;i++){const p=burstPieces[i];p.mesh.position.copyFrom(knight.position);p.mesh.position.y+=.2;p.velocity.set((rand()-.5)*9,rand()*7+2,(rand()-.5)*9);p.life=.7;p.mesh.setEnabled(true);}}
+window.addEventListener('resize',()=>{engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio||1,2));engine.resize();fitBoardCamera();});
+const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
+function burst(){for(const p of burstPieces){p.mesh.position.copyFrom(knight.position);p.mesh.position.y+=.2;p.velocity.set((rand()-.5)*6,rand()*5+2,(rand()-.5)*6);p.life=.6;p.mesh.setEnabled(true);}}
 function update(dt){
-  jumpSparkles.emitRate=mode==='playing'&&phase==='air'?210+spinJuice*180:0;
+  jumpSparkles.emitRate=mode==='playing'&&phase==='air'?180+spinJuice*100:0;
   if(mode==='playing'){
     runTime+=dt;phaseTime+=dt;spinJuice=Math.max(0,spinJuice-dt*4);tapKick*=Math.exp(-dt*14);
-    if(phase==='cruise'){
-      const r=roads[current];roadProgress+=SPEED*Math.min(1.35,1+landings*.012)*dt;knight.position.copyFrom(roadPoint(r,0,Math.min(roadProgress,r.length)));knight.position.y=.035+Math.sin(runTime*19)*.012;
-      spinner.rotation.y=FORWARD_YAW+roads[current].heading+tapKick;spinner.rotation.z=-tapKick*.25;spinner.rotation.x=-.045;
-      if(roadProgress>=r.length){phase='air';jumpTime=0;airDuration=FLIGHT+.28*(Math.abs(roads[current+1].target)-1);phaseTime=0;visualSpin=0;burst();}
+    const origin=circuit[current];
+    if(phase==='ready'){
+      knight.position.y=GROUND;spinner.rotation.y=FORWARD_YAW+origin.heading+tapKick;spinner.rotation.z=-tapKick*.25;spinner.rotation.x=0;
+      launchRing.setEnabled(true);launchRing.position.copyFrom(knight.position);launchRing.position.y=.09;launchRing.scaling.setAll(.65+.45*(1-Math.min(1,phaseTime/READY_TIME)));
+      if(phaseTime>=READY_TIME){phase='air';jumpTime=0;airDuration=1.25+.30*(Math.abs(circuit[current+1].turns)-1);phaseTime=0;visualSpin=0;burst();launchRing.setEnabled(false);}
     }else if(phase==='air'){
-      jumpTime+=dt;const t=Math.min(1,jumpTime/airDuration),r=roads[current],p=rotateGrid(flightPoint(selected,t),r.heading);
-      const desiredX=r.end.x+p.x*SCALE,desiredZ=r.end.z+p.z*SCALE;
-      knight.position.x+=(desiredX-knight.position.x)*Math.min(1,dt*35);knight.position.z+=(desiredZ-knight.position.z)*Math.min(1,dt*35);
-      knight.position.y=.035+Math.sin(t*Math.PI)*3.65+Math.sin(t*Math.PI)*spinJuice*.35;
-      const motionHeading=flightHeading(selected,t);
-      visualSpin+=wrapAngle(motionHeading-visualSpin)*(1-Math.exp(-dt*24));spinner.rotation.y=FORWARD_YAW+roads[current].heading+visualSpin;
-      spinner.rotation.z=Math.sin(t*Math.PI)*.10*Math.sign(selected);spinner.rotation.x=Math.sin(t*Math.PI)*.16;
+      jumpTime+=dt;const t=Math.min(1,jumpTime/airDuration),p=rotateGrid(flightPoint(selected,t),origin.heading);
+      knight.position.x=(origin.x+p.x)*CELL_SIZE;knight.position.z=(origin.z+p.z)*CELL_SIZE;
+      knight.position.y=GROUND+Math.sin(t*Math.PI)*3.0;
+      visualSpin+=wrapAngle(flightHeading(selected,t)-visualSpin)*(1-Math.exp(-dt*24));spinner.rotation.y=FORWARD_YAW+origin.heading+visualSpin;
+      spinner.rotation.z=Math.sin(t*Math.PI)*.08*Math.sign(selected);spinner.rotation.x=Math.sin(t*Math.PI)*.12;
       if(t===1){
-        knight.position.copyFrom(chosenLanding());
-        if(isLandingMatch(selected,roads[current+1].target)){
+        knight.position.copyFrom(worldCell(chosenCell()));
+        if(isLandingMatch(selected,circuit[current+1].turns)){
           current++;landings++;combo++;score+=100+combo*25+Math.abs(selected)*10;el('score').textContent=String(score).padStart(5,'0');
-          burst();flash=1;audio.land(combo);toast(''+combo+'× flow','+'+(100+combo*25+Math.abs(selected)*10),.55);
-          phase='cruise';phaseTime=0;roadProgress=0;selected=0;visualSpin=0;spinner.rotation.y=FORWARD_YAW+roads[current].heading;extend();updateGuides();
-        }else{phase='fall';phaseTime=0;combo=0;audio.fall();landingPreview.setEnabled(false);previewBeam.setEnabled(false);}
+          burst();flash=1;audio.land(combo);selected=0;visualSpin=0;spinner.rotation.set(0,FORWARD_YAW+circuit[current].heading,0);updateMarkers();
+          if(current===circuit.length-1){finish(true);}
+          else{phase='ready';phaseTime=0;lastGuideKey='';updateGuides();}
+        }else{phase=isOnBoard(chosenCell())?'miss':'fall';phaseTime=0;audio.fall();landingPreview.material=missMaterial;pathRoot?.setEnabled(false);}
       }
-    }else if(phase==='fall'){knight.position.y-=dt*(5+phaseTime*14);spinner.rotation.z+=dt*1.7;if(phaseTime>1.05)finish();}
-    if(phase!=='fall'){
-      const show=phase==='air'||roads[current].length-roadProgress<36;
-      landingPreview.setEnabled(show);previewBeam.setEnabled(show);gapRoot?.setEnabled(show);pathRoot?.setEnabled(show);
-      if(show){const dest=chosenLanding();landingPreview.position.copyFrom(dest);landingPreview.position.y=.04;previewBeam.position.copyFrom(dest);previewBeam.position.y=1.2;landingPreview.scaling.setAll(1+audio.pulse*.06);}
-    }
-    updateCamera(dt);
-    scenery.position.set(knight.position.x*.9,0,knight.position.z*.9);rim.position.set(knight.position.x-2,knight.position.y+5,knight.position.z-3);
-  }else if(mode==='start'){
-    const t=performance.now()*.001;knight.position.y=.25+Math.sin(t*2)*.10;spinner.rotation.y=FORWARD_YAW+Math.sin(t*.5)*.035;
-    if(window.innerWidth<700&&window.innerHeight>550){camera.position.set(-8,5.8,-10);camera.setTarget(new Vector3(7,3.0,20));}
-    else{camera.position.set(-10+Math.sin(t*.15)*.5,5.0,-11);camera.setTarget(new Vector3(-9,1.4,20));}
+    }else if(phase==='miss'){spinner.rotation.z*=Math.exp(-dt*8);if(phaseTime>.65)finish();}
+    else if(phase==='fall'){knight.position.y-=dt*(6+phaseTime*12);if(phaseTime>.70)finish();}
   }
   if(mode==='playing'||mode==='start'){
-    glow.intensity=.47+audio.pulse*.10;planetRing.rotation.y+=dt*.03;
-    shadow.position.set(knight.position.x,.005,knight.position.z);shadow.scaling.setAll(Math.max(.4,1-(knight.position.y-.035)*.08));shadow.setEnabled(phase!=='fall');
-    for(const r of roads){r.ring.scaling.setAll(1+Math.sin(runTime*3+r.index)*.05);r.root.setEnabled(mode==='start'?r.index<3:r===roads[current]||r===roads[current+1]);}
-    for(const p of burstPieces){if(p.life>0){p.life-=dt;p.mesh.position.addInPlace(p.velocity.scale(dt));p.velocity.y-=dt*13;p.mesh.scaling.setAll(Math.max(0,p.life/.7));if(p.life<=0)p.mesh.setEnabled(false);}}
-    if(toastTimer>0){toastTimer-=dt;if(toastTimer<=0)visible('toast',false);}
-    flash=Math.max(0,flash-dt*3.5);el('flash').style.opacity=flash*.45;
+    glow.intensity=.43+audio.pulse*.10;
+    shadow.position.set(knight.position.x,.012,knight.position.z);shadow.scaling.setAll(Math.max(.6,1.55-(knight.position.y-GROUND)*.10));shadow.setEnabled(isOnBoard({x:knight.position.x/CELL_SIZE,z:knight.position.z/CELL_SIZE}));
+    for(let i=0;i<markers.length;i++){const m=markers[i];m.crystal.rotation.y+=dt*.65;m.crystal.position.y=.85+Math.sin(runTime*2+i)*.12;m.ring.scaling.setAll(i===current?1+Math.sin(runTime*3)*.04:1);}
+    for(const p of burstPieces){if(p.life>0){p.life-=dt;p.mesh.position.addInPlace(p.velocity.scale(dt));p.velocity.y-=dt*12;p.mesh.scaling.setAll(Math.max(0,p.life/.6));if(p.life<=0)p.mesh.setEnabled(false);}}
+    flash=Math.max(0,flash-dt*3.5);el('flash').style.opacity=flash*.35;
   }
 }
 engine.runRenderLoop(()=>{update(Math.min(engine.getDeltaTime()/1000,.05));scene.render();});
 scene.executeWhenReady(()=>{visible('loading',false);});
-const state=()=>({mode,phase,selected,target:roads[current+1]?.target,jump:landings+1,score,combo,landings,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},takeoff:Math.max(0,roads[current]?.length-roadProgress),airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,speed:SPEED,cellSize:SCALE,heading:roads[current]?.heading,landingHeading:roads[current+1]?.heading,viewHeading,launch:roads[current]?.end,landing:{x:roads[current+1]?.x,z:roads[current+1]?.z},render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z},knightYaw:spinner.rotation.y,sparkles:jumpSparkles.getActiveCount()});
+const state=()=>({mode,phase,selected,target:circuit[current+1]?.turns,jump:landings+1,score,combo,landings,totalLandings:circuit.length-1,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},planning:Math.min(1,phaseTime/READY_TIME),airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{radius:BOARD_RADIUS,cells:cells.length,extent:boardWidth/2},heading:circuit[current]?.heading,landingHeading:circuit[current+1]?.heading,launch:{x:circuit[current].x*CELL_SIZE,z:circuit[current].z*CELL_SIZE},landing:circuit[current+1]?{x:circuit[current+1].x*CELL_SIZE,z:circuit[current+1].z*CELL_SIZE}:null,render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,sparkles:jumpSparkles.getActiveCount()});
 // Observability for playtesting; actions are the same as keyboard and touch.
 window.knightwave={state,start,turn,pause,resume,mute,engine,scene};
 if(document.modelContext?.registerTool){
