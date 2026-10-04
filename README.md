@@ -40,7 +40,7 @@ The original soundtrack, *Stardust Overdrive*, is synthesized in Web Audio: four
 
 `npm test` checks chained movement, mirrored turns, corrections, exact L trajectories, rotated landing directions, circuit closure, bounded paths, nonintersecting runways and platform rise/fall lifecycles.
 
-`node verify.mjs` completes the six-jump circuit on desktop and touch-controlled phone viewports. It checks exact landing positions, a fixed orthographic camera, return to the starting position, victory, midair corrections, run-up and flight pause/resume, sparkles, mute, misses, restart, help, removal of the tap-count overlay and high-resolution phone rendering. It also verifies continuous travel during run-ups, upcoming platforms rising and departed platforms falling, with motion frozen during pause. The Chrome executable path currently targets macOS.
+`node verify.mjs` completes the six-jump circuit on desktop and touch-controlled phone viewports. It checks exact landing positions, a fixed orthographic camera, return to the starting position, victory, midair corrections, run-up and flight pause/resume, sparkles, mute, misses, restart, help, removal of the tap-count overlay and high-resolution phone rendering. It also verifies continuous travel during run-ups and unselected jumps, upcoming platforms rising and departed platforms falling, with motion frozen during pause. The Chrome executable path currently targets macOS.
 
 `node mobilecheck.mjs` checks same-event touch feedback, header controls, landing, pause/resume and landscape layout. Phone browser emulation is not a physical-device benchmark.
 

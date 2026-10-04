@@ -24,6 +24,11 @@ test('multi-turn paths and landings agree, including a full loop and corrections
     assert.ok(Math.abs(p.x-expected.x)<1e-8&&Math.abs(p.z-expected.z)<1e-8);
   }
 });
+test('an unselected jump keeps travelling forward instead of hovering midair',()=>{
+  const points=[.42,.5,.7,.9,1].map(t=>flightPoint(0,t));
+  for(let i=1;i<points.length;i++)assert.ok(points[i].z>points[i-1].z);
+  assert.deepEqual(points.at(-1),{x:0,z:3});
+});
 test('every rotated landing road continues in the direction of the final knight leg',()=>{
   for(const heading of [0,Math.PI/2,Math.PI,3*Math.PI/2])for(const steps of [-3,-2,-1,1,2,3]){
     const road={end:{x:24,z:-16},heading},next=roadLanding(road,steps);

@@ -195,7 +195,7 @@ function start(){
   el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();updatePlatforms(0,true);fitBoardCamera();
 }
 function chosenCell(){
-  const origin=circuit[current].launch,offset=rotateGrid(selected===0?{x:0,z:2}:knightDestination(selected),origin.heading);
+  const origin=circuit[current].launch,offset=rotateGrid(selected===0?{x:0,z:3}:knightDestination(selected),origin.heading);
   return {x:origin.x+offset.x,z:origin.z+offset.z};
 }
 function updateGuides(){
@@ -204,7 +204,7 @@ function updateGuides(){
   const key=current+':'+selected;if(key===lastGuideKey)return;lastGuideKey=key;
   pathRoot?.dispose(false,false);pathRoot=new TransformNode('selected L route',scene);
   const origin=circuit[current].launch;
-  const points=selected===0?[origin,{x:origin.x+Math.sin(origin.heading)*2,z:origin.z+Math.cos(origin.heading)*2}]:circuitPath(origin,selected);
+  const points=selected===0?[origin,{x:origin.x+Math.sin(origin.heading)*3,z:origin.z+Math.cos(origin.heading)*3}]:circuitPath(origin,selected);
   const line=MeshBuilder.CreateTube('selected knight trace',{path:points.map(p=>new Vector3(p.x*CELL_SIZE,PLATFORM_TOP+.12,p.z*CELL_SIZE)),radius:.045,tessellation:8},scene);line.material=mint;line.parent=pathRoot;
   for(const p of points){const dot=MeshBuilder.CreateTorus('L corner',{diameter:.35,thickness:.04,tessellation:24},scene);dot.position.set(p.x*CELL_SIZE,PLATFORM_TOP+.13,p.z*CELL_SIZE);dot.material=mint;dot.parent=pathRoot;}
   landingPreview.position.copyFrom(worldCell(chosenCell()));landingPreview.position.y=PLATFORM_TOP+.14;landingPreview.material=isOnBoard(chosenCell())?mint:missMaterial;landingPreview.setEnabled(true);

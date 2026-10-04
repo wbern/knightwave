@@ -44,7 +44,7 @@ export function flightPoint(steps, progress) {
   // The common opening leg always travels two squares forward. Corrections
   // can change the remaining turns without changing that visible first leg.
   if (t <= .42) return { x: 0, z: 2 * t / .42 };
-  if (steps === 0) return { x: 0, z: 2 };
+  if (steps === 0) return { x: 0, z: 2 + (t - .42) / .58 };
   const path = knightPath(steps).slice(1);
   const lengths = path.slice(1).map((p, i) => Math.abs(p.x - path[i].x) + Math.abs(p.z - path[i].z));
   let distance = (t - .42) / .58 * lengths.reduce((sum, value) => sum + value, 0);

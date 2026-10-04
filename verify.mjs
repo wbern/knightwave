@@ -66,7 +66,11 @@ try {
     await page.getByRole('button',{name:'Unmute soundtrack'}).click();
     await page.getByRole('button',{name:'How to play'}).click();assert.equal(await page.getByRole('dialog').count(),1);
     await page.getByRole('button',{name:'Got it'}).click();
-    // A neutral straight jump misses the gold destination; retry must fully reset.
+    // An unselected jump keeps travelling, misses the amber deck and can be retried.
+    await page.waitForFunction(()=>{const s=window.knightwave.state();return s.phase==='air'&&s.airtime>.5});
+    const unselected=await page.evaluate(()=>window.knightwave.state());
+    await page.waitForFunction(()=>{const s=window.knightwave.state();return s.phase==='air'&&s.airtime>.75});
+    assert.ok((await page.evaluate(()=>window.knightwave.state())).position.z>unselected.position.z,'Unselected flight must keep moving');
     await page.waitForFunction(()=>window.knightwave.state().mode==='over',null,{timeout:10000});
     await page.screenshot({path:`/tmp/knightwave-${name}-gameover-final.png`});
     await page.getByRole('button',{name:'Ride again'}).click();assert.equal((await page.evaluate(()=>window.knightwave.state())).landings,0);
