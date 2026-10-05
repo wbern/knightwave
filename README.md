@@ -1,6 +1,6 @@
 # Knightwave
 
-A playable Babylon.js chess arcade game: a sculpted 3D knight, a fixed front-facing 8×8 chessboard, rising and falling platforms, an energy-orb premove composer, chained L-shaped jumps, and an original 160 BPM soundtrack.
+A playable Babylon.js chess arcade game: a sculpted 3D knight, an endless scrolling chess grid, rising and falling platforms, an energy-orb premove composer, north-facing L jumps, and an original 160 BPM soundtrack.
 
 ## Open in your browser
 
@@ -17,24 +17,24 @@ Open the printed local URL. `npm run build` produces the standalone browser game
 
 ## Play
 
-- Complete six landings and return home on an 8×8 board, viewed from above and in front with a–h and 1–8 coordinates. Rank 1 is at the bottom. Bright platforms are raised; dark recessed squares are below them.
+- Keep landing on an endless grid viewed from above and in front. Files a–h stay horizontal, and ranks continue increasing upward. Bright platforms are raised; dark recessed squares are below them.
 - Compose a group of L moves in the fixed UI energy orb: Left/Right or A/D on desktop, side taps or turn arrows on a phone. An opposite tap undoes a turn. Each icon means two squares along the stem, then one across the arrow.
 - Press Space or swipe upward to dispatch the group for one upcoming platform. The draft clears so you can compose the next group. Tapping the orb is an alternative to the swipe.
 - The borderless banner contains only your dispatched premoves. Thin vertical dividers separate platform groups; it never displays the correct answer automatically. Icons show the actual orientation of their moves. Long queues scroll horizontally on touchscreens.
-- Each tap chains a quarter-turned knight move. Right destinations in grid units are `(1,2)`, `(3,1)`, `(2,-1)`, then `(0,0)`. Left mirrors the horizontal coordinate. The next group follows the previous group's final heading.
+- Every L begins facing up: two ranks forward and one file left or right. A group of N right moves lands N files right and 2N ranks forward; left mirrors the lateral distance. Every group and every icon uses the same north-facing reference. Drafts contain up to four L moves.
 - Each platform occupies one square. The knight jumps directly from its center using the next dispatched group, with a 0.30-second settling pause between queued jumps. If no group is ready, it waits for you. Once takeoff begins, that group is locked; edits in the orb prepare future jumps. The banner underlines the executing group's flight progress and removes it at touchdown.
-- Swipe down or press Backspace to clear an unsent draft, then recall the last unstarted group for correction. A group already in flight cannot be recalled. Empty sends are ignored, and a full six-platform queue cannot accept extra groups.
-- Escape or the pause button pauses; M toggles sound. Space starts or retries when outside a run. A wrong dispatched move ends the attempt; six correct landings complete the circuit. Both outcomes offer immediate retry.
-- Platforms rise ahead and fall behind. Board trails, route arrows and landing-preview rings are absent. Every L leg fits within the board, and single-square platforms do not overlap. The circuit is in `src/board.js`.
-- The best circuit score is stored on this device under `knightwave-board-best` when storage is available.
+- Swipe down or press Backspace to clear an unsent draft, then recall the last unstarted group for correction. A group already in flight cannot be recalled. Empty sends are ignored, and a full eight-group queue cannot accept extra groups.
+- Escape or the pause button pauses; M toggles sound. Space starts or retries when outside a run. A wrong dispatched move ends the attempt and offers immediate retry. Correct landings keep generating the next platforms, without a finish line.
+- Platforms rise ahead and fall behind. Board trails, route arrows and landing-preview rings are absent. Successive platforms lie farther up the grid and occupy distinct squares. `src/board.js` generates the course deterministically, keeps targets within the central files for readable framing, and retains at most 11 nearby stops. The ground continues beyond those files.
+- The best run score is stored on this device under `knightwave-board-best` when storage is available.
 
 The interaction refinement and primary research sources are recorded in [the premove orb design notes](docs/design/premove-orb.md).
 
 ## Graphics and audio
 
-The camera is fixed above the front edge at roughly 44 degrees with orthographic projection. Files stay horizontal and ranks stay vertical on screen, so the board keeps its chess orientation while height remains visible. The checkerboard uses 64 recessed squares in two dark tones and standard chess coordinates. Eighteen shared physical rails form a raised rim around every square; raised platforms have brighter tops, side faces and rims around each single square. Responsive framing keeps the board, move strip and controls apart on desktop, portrait phones and landscape screens.
+The orthographic camera retains a roughly 44-degree front view and translates forward smoothly with the knight. It never rotates. A soft fade keeps the scrolling ground clear of the banner and controls. Twelve columns and 24 rows are recycled two rows at a time to preserve checker parity. Two merged meshes draw the dark checker squares, and one merged mesh draws all their physical rims. The ground has no enclosing finite frame. Five reusable single-square platforms cover the occupied square, approaching landings and departed squares. Ranks scroll while the familiar a–h file labels stay in place. Responsive framing keeps the knight and landing square visible on desktop, portrait phones and landscape screens.
 
-`src/knight.js` builds an original porcelain chess knight from sculpted neck and muzzle sections, paired ears, eyes, a carved mane and a turned pedestal. It follows rounded airborne bends, rocks immediately on input and briefly compresses on landing. A centered trick pivot adds a complete shuv-it, a barrel roll for longer chains, and a double spin for three or more L moves. Tricks settle before touchdown, facing the next platform; chess landing coordinates remain exact. A directional light casts soft shadows from the knight and decks onto the board; a separate shadow directly beneath the piece makes its ground position readable throughout flight. The 4.8-unit jump arc visibly lifts the whole piece, and a slim underline on the executing premove group tracks flight progress without revealing a route. Jump sparkles use a dedicated star texture and particle system. The mark, favicon and L glyphs are hand-drawn vector assets; the earlier `public/knight-piece.svg` remains as source artwork.
+`src/knight.js` builds an original porcelain chess knight from sculpted neck and muzzle sections, paired ears, eyes, a carved mane and a turned pedestal. It follows rounded airborne bends, rocks immediately on input and briefly compresses on landing. A centered trick pivot adds a complete shuv-it, a barrel roll for longer chains, and a double spin for three or more L moves. Tricks settle before touchdown, facing north; chess landing coordinates remain exact. A directional light casts soft shadows from the knight and decks onto the board; a separate shadow directly beneath the piece makes its ground position readable throughout flight. The 4.8-unit jump arc visibly lifts the whole piece, and a slim underline on the executing premove group tracks flight progress without revealing a route. Jump sparkles use a dedicated star texture and particle system. The mark, favicon and L glyphs are hand-drawn vector assets; the earlier `public/knight-piece.svg` remains as source artwork.
 
 An illustrated energy orb stays fixed in the UI below the board, between the mobile turn controls. A shaded SVG sphere and orbit surround crisp editable L glyphs. Dispatch sends the glyphs toward the banner and briefly expands the orb, paired with a synthesized sound. Landscape places the orb in the free area beside the board. Scene glow and lighting stay constant; landing feedback uses local sparkles without a full-screen brightness flash.
 
@@ -46,16 +46,14 @@ The original soundtrack, *Stardust Overdrive*, is synthesized in Web Audio: four
 
 ## Verification
 
-`npm test` checks chained movement, mirrored turns, corrections, exact L trajectories, rotated landing directions, circuit closure, bounded paths, single-square platforms without overlaps, platform rise/fall lifecycles and exact agreement between each rotated/mirrored icon and its physical L legs.
+`npm test` checks forward L geometry, mirrored inputs, upright icons, bounded queue capacity over 1,000 groups, deterministic course generation and bounded lookahead over 2,000 landings, platform lifecycles, exact rounded-flight endpoints, steady travel speed and completed aerial tricks.
 
-`src/premoves.test.js` checks draft isolation, FIFO dispatch, group orientations, flight locking, recall, empty/full queue boundaries and swipe discrimination. `src/flight.test.js` verifies exact endpoints, mirrored rounded routes, continuous heading, steady travel speed and complete tricks that settle before touchdown.
+`node verify.mjs` plays 12 landings on desktop and native touch-controlled phone layouts. It checks exact destinations, continued play beyond the former six-jump finish, forward-facing resets, nonrotating camera movement, bounded mesh counts and course storage, dark materials, single-square platforms, premoves, recall, pause, miss and retry. `KNIGHTWAVE_JUMPS` can extend the run. Chrome paths currently target macOS.
 
-`node verify.mjs` completes all six jumps on desktop and touch-controlled phone layouts using Space and native touch swipes. It checks exact landings, a fixed aligned camera, dark recessed materials, physical square rims, an empty answer-free banner, borderless compact styling, orb composition, group dividers, dispatch, draft clearing, locked flights, recalling future groups, safe waiting, pause, win, miss, retry, sound and help. Every landing is recorded even when input is faster than the animation. Chrome paths currently target macOS.
+`node mobilecheck.mjs` checks same-event orb feedback, canceled drags, side-origin swipes, orb dispatch, recall, pause and landscape resizing. Phone emulation is not a physical-device benchmark.
 
-`node mobilecheck.mjs` checks same-event orb feedback, canceled drags, a dispatch swipe starting on a side without an extra turn, tap-button dispatch, downward recall, pause and landscape layout. Touch input is exercised through Chrome's native input dispatch; phone emulation is not a physical-device benchmark.
-
-`node visualcheck.mjs` plays six jumps on desktop, portrait phone, compact phone and landscape layouts, records videos, and captures waiting, charged drafts, launch, flight, landing and platform transitions. Every animation frame checks board and knight visibility, fixed UI orb placement, constant scene glow, a fixed camera and separation from the premove banner. Captures and a JSON report go to `/tmp/knightwave-visual`. Set `KNIGHTWAVE_URL` to check a public deployment and `KNIGHTWAVE_CAPTURES` to choose a capture directory.
+`node visualcheck.mjs` plays ten jumps on each of desktop, portrait phone, compact phone and landscape layouts. Videos and captures cover composition, launch, tricks, landing and platform transitions. Every animation frame checks the knight and landing square against the visible play area, a fixed UI orb, constant glow, forward orientation, camera rotation and bounded rendering pools. Captures and JSON reports go to `/tmp/knightwave-visual`. Set `KNIGHTWAVE_URL`, `KNIGHTWAVE_CAPTURES`, `KNIGHTWAVE_LAYOUTS`, or `KNIGHTWAVE_JUMPS` to select a deployment, capture directory, layout or run length.
 
 Review captures live in `docs/screenshots/`. The game is in `src/main.js`, the sculpted knight in `src/knight.js`, the board in `src/board.js`, the premove state and gesture rules in `src/premoves.js`, platform animation rules in `src/platforms.js`, move icons in `src/moves.js`, soundtrack in `src/audio.js` and movement rules in `src/rules.js`.
 
-Optional WebMCP state and rotation tools are feature-detected. This browser does not expose a supported WebMCP context, so WebMCP integration validation is unavailable.
+Optional WebMCP state and premove tools are feature-detected. This browser does not expose a supported WebMCP context, so WebMCP integration validation is unavailable.

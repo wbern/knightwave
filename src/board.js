@@ -1,30 +1,21 @@
-import {knightPath,rotateGrid,roadLanding} from './rules.js';
+import {knightDestination} from './rules.js';
+export const BOARD_MIN=-4,BOARD_MAX=3,BOARD_CELLS=8,BOARD_CENTER=-.5,CELL_SIZE=4;
+export const GRID_COLS=12,GRID_ROWS=24;
+const opening=[1,-2,1,3,-1,-2,2,-1];
 
-export const BOARD_MIN=-4;
-export const BOARD_MAX=3;
-export const BOARD_CELLS=8;
-export const BOARD_CENTER=(BOARD_MIN+BOARD_MAX)/2;
-export const CELL_SIZE=4;
-export const CIRCUIT_TURNS=[1,2,-1,3,-2,-3];
-// Each platform occupies one chess square; jumps start at its center.
-export function createCircuit(){
-  const stops=[{x:-1,z:0,heading:0,turns:0}];
-  for(let i=0;i<=CIRCUIT_TURNS.length;i++){
-    const stop=stops[i];
-    stop.launch={x:stop.x,z:stop.z,heading:stop.heading};
-    if(i<CIRCUIT_TURNS.length){
-      const turns=CIRCUIT_TURNS[i];
-      stops.push({...roadLanding({end:stop.launch,heading:stop.heading},turns,1),turns});
+// Logical lookahead and rendering pools stay bounded, however long the run.
+export class EndlessCourse{
+  constructor(seed=512){this.seed=seed;this.reset();}
+  reset(){this.random=this.seed;this.stops=[{index:0,x:-1,z:0,heading:0,turns:0}];this.ensure(8);}
+  ensure(index){
+    while(this.stops.at(-1).index<index){
+      const previous=this.stops.at(-1),next=previous.index+1;
+      this.random=(Math.imul(this.random,1664525)+1013904223)>>>0;
+      const choices=[-3,-2,-1,1,2,3].filter(turns=>previous.x+turns>=-3&&previous.x+turns<=2&&!(Math.abs(previous.turns)===3&&Math.abs(turns)===3));
+      const turns=next<=opening.length?opening[next-1]:choices[this.random%choices.length],offset=knightDestination(turns);
+      this.stops.push({index:next,x:previous.x+offset.x,z:previous.z+offset.z,heading:0,turns});
     }
   }
-  return stops;
-}
-export function circuitPath(start,turns){
-  return knightPath(turns).map(point=>{
-    const offset=rotateGrid(point,start.heading);
-    return {x:start.x+offset.x,z:start.z+offset.z};
-  });
-}
-export function isOnBoard(point){
-  return point.x>=BOARD_MIN&&point.x<=BOARD_MAX&&point.z>=BOARD_MIN&&point.z<=BOARD_MAX;
+  at(index){this.ensure(index);const stop=this.stops.find(p=>p.index===index);if(!stop)throw new Error('Course stop has already been recycled');return stop;}
+  maintain(current){this.ensure(current+8);this.stops=this.stops.filter(p=>p.index>=Math.max(0,current-2));}
 }

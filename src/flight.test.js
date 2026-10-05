@@ -8,7 +8,7 @@ test('rounded airborne routes keep exact chess landings and continuous heading',
     const start=flightPose(turns,0),end=flightPose(turns,1);
     assert.deepEqual({x:start.x,z:start.z},{x:0,z:0});
     assert.deepEqual({x:end.x,z:end.z},knightDestination(turns));
-    assert.ok(Math.abs(end.heading-turns*Math.PI/2)<1e-9);
+    assert.ok(Math.abs(end.heading-Math.sign(turns)*Math.PI/2)<1e-9);
     let previous=start,lastDistance=null;
     for(let i=1;i<=1000;i++){
       const next=flightPose(turns,i/1000),distance=Math.hypot(next.x-previous.x,next.z-previous.z);

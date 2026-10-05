@@ -1,17 +1,17 @@
 export function normalizeTurns(turns){
-  return turns?Math.sign(turns)*(Math.abs(turns)%4||4):0;
+  return turns;
 }
 
 // The draft is editable. Committed groups are FIFO; the flying group is locked.
 export class Premoves {
-  constructor(limit=6){this.limit=limit;this.reset();}
+  constructor(limit=8){this.limit=limit;this.reset();}
   reset(){this.draft=0;this.groups=[];this.completed=0;this.locked=false;this.nextId=1;}
-  get full(){return this.completed+this.groups.length>=this.limit;}
-  draftHeading(heading){const last=this.groups.at(-1);return last?last.heading+last.turns*Math.PI/2:heading;}
-  edit(direction){if(this.full||![-1,1].includes(direction))return false;this.draft+=direction;return true;}
-  dispatch(heading){
+  get full(){return this.groups.length>=this.limit;}
+  draftHeading(){return 0;}
+  edit(direction){if(this.full||![-1,1].includes(direction)||Math.abs(this.draft+direction)>4)return false;this.draft+=direction;return true;}
+  dispatch(){
     if(!this.draft||this.full)return null;
-    const group={id:this.nextId++,turns:normalizeTurns(this.draft),heading:this.draftHeading(heading)};
+    const group={id:this.nextId++,turns:this.draft,heading:0};
     this.groups.push(group);this.draft=0;return group;
   }
   begin(){if(this.locked||!this.groups.length)return null;this.locked=true;return this.groups[0];}

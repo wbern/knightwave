@@ -1,13 +1,6 @@
-import {rotateGrid} from './rules.js';
-
-// Each glyph represents one actual two-forward / one-across knight move.
-export function moveSequence(steps,heading){
-  if(!steps)return [];
-  const direction=Math.sign(steps),count=Math.abs(steps)%4||4;
-  return Array.from({length:count},(_,i)=>{
-    const angle=heading+direction*i*Math.PI/2;
-    return {direction,heading:angle,forward:rotateGrid({x:0,z:2},angle),across:rotateGrid({x:direction,z:0},angle)};
-  });
+// Every icon keeps the same up-facing reference, including future groups.
+export function moveSequence(steps){
+  return Array.from({length:Math.abs(steps)},()=>({direction:Math.sign(steps),heading:0,forward:{x:0,z:2},across:{x:Math.sign(steps),z:0}}));
 }
 export function moveGlyph(move){
   const rotation=Math.round(move.heading*180/Math.PI);

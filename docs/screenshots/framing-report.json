@@ -1,7 +1,9 @@
 [
   {
     "viewport": "desktop",
-    "frames": 661,
+    "jumps": 10,
+    "frames": 1082,
+    "cameraAdvance": 135.95199046525977,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],
@@ -9,7 +11,9 @@
   },
   {
     "viewport": "phone",
-    "frames": 735,
+    "jumps": 10,
+    "frames": 1146,
+    "cameraAdvance": 135.95898411479743,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],
@@ -17,7 +21,9 @@
   },
   {
     "viewport": "compact",
-    "frames": 728,
+    "jumps": 10,
+    "frames": 1156,
+    "cameraAdvance": 135.95292037270542,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],
@@ -25,7 +31,9 @@
   },
   {
     "viewport": "landscape",
-    "frames": 709,
+    "jumps": 10,
+    "frames": 1152,
+    "cameraAdvance": 135.95298616133516,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],

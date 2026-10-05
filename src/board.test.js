@@ -1,35 +1,20 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {BOARD_MIN, BOARD_MAX, createCircuit, circuitPath, isOnBoard} from './board.js';
-import {flightPoint, rotateGrid} from './rules.js';
-
-test('six chained jumps form a closed circuit with the original facing',()=>{
-  const stops=createCircuit();
-  assert.deepEqual(stops.map(p=>p.turns),[0,1,2,-1,3,-2,-3]);
-  assert.deepEqual([stops.at(-1).x,stops.at(-1).z],[stops[0].x,stops[0].z]);
-  assert.equal(stops.at(-1).heading,stops[0].heading);
+import {EndlessCourse} from './board.js';
+import {knightDestination,knightPath} from './rules.js';
+test('an endless course keeps progressing beyond old board bounds with bounded lookahead',()=>{
+ const course=new EndlessCourse();let previous=course.at(0),maxRetained=0;
+ for(let i=1;i<=2000;i++){
+  const next=course.at(i),offset=knightDestination(next.turns);
+  assert.deepEqual({x:next.x-previous.x,z:next.z-previous.z},offset);
+  assert.ok(next.z>previous.z);assert.equal(next.heading,0);assert.ok(next.x>=-3&&next.x<=2);
+  for(const p of knightPath(next.turns))assert.ok(previous.x+p.x>=-3&&previous.x+p.x<=2);
+  course.maintain(i);maxRetained=Math.max(maxRetained,course.stops.length);previous=next;
+ }
+ assert.ok(previous.z>4000);assert.ok(maxRetained<=11);
 });
-test('every landing and intermediate L leg stays inside the finite board',()=>{
-  const stops=createCircuit();
-  for(let i=1;i<stops.length;i++){
-    const start=stops[i-1],end=stops[i],path=circuitPath(start.launch,end.turns);
-    assert.deepEqual(path.at(-1),{x:end.x,z:end.z});
-    for(const p of [start,start.launch,...path])assert.ok(isOnBoard(p));
-    for(let frame=0;frame<=100;frame++){
-      const offset=rotateGrid(flightPoint(end.turns,frame/100),start.heading);
-      assert.ok(isOnBoard({x:start.launch.x+offset.x,z:start.launch.z+offset.z}));
-    }
-  }
-  assert.ok(isOnBoard({x:BOARD_MAX,z:BOARD_MIN}));
-  assert.ok(!isOnBoard({x:BOARD_MAX+.01,z:0}));
-});
-
-test('single-square platforms launch from their centers and never overlap',()=>{
-  const stops=createCircuit();
-  for(const stop of stops)assert.deepEqual(stop.launch,{x:stop.x,z:stop.z,heading:stop.heading});
-  const rectangles=stops.slice(0,-1).map(p=>({left:p.x-.4625,right:p.x+.4625,bottom:p.z-.4625,top:p.z+.4625}));
-  for(let i=0;i<rectangles.length;i++)for(const b of rectangles.slice(0,i)){
-    const a=rectangles[i];
-    assert.ok(!(a.left<b.right&&a.right>b.left&&a.bottom<b.top&&a.top>b.bottom));
-  }
+test('course generation is reproducible across resets and recycling',()=>{
+ const a=new EndlessCourse(),b=new EndlessCourse();
+ for(let i=0;i<100;i++){assert.deepEqual(a.at(i),b.at(i));a.maintain(i);b.maintain(i);}
+ a.reset();b.reset();assert.deepEqual(a.stops,b.stops);
 });
