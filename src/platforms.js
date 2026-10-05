@@ -1,4 +1,4 @@
-export const PLATFORM_TOP=.8;
+export const PLATFORM_TOP=-1.1;
 export const CRUISE_SPEED=5.2;
 const clamp=value=>Math.max(0,Math.min(1,value));
 export function platformStage(index,current){

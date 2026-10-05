@@ -45,5 +45,7 @@ const base=MeshBuilder.CreateLathe('turned chess pedestal',{shape:profile,tessel
 for(const [diameter,y] of [[2.05,.12],[1.55,.61]]){const ring=MeshBuilder.CreateTorus('pedestal inlay',{diameter,thickness:.055,tessellation:64},scene);ring.parent=spinner;ring.position.y=y;ring.material=purple;}
 const baseRing=MeshBuilder.CreateTorus('plinth glow',{diameter:2.02,thickness:.045,tessellation:64},scene);baseRing.parent=spinner;baseRing.position.y=.035;baseRing.material=mint;
 spinner.rotation.y=FORWARD_YAW;knight.scaling.setAll(1.38);
-return {knight,spinner};
+const trick=new TransformNode('knight trick pivot',scene);trick.parent=spinner;trick.position.y=1.6;
+for(const mesh of spinner.getChildMeshes()){mesh.parent=trick;mesh.position.y-=1.6;}
+return {knight,spinner,trick};
 }

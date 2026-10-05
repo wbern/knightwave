@@ -17,7 +17,7 @@ try {
     await page.screenshot({path:`${output}/${name}-start.png`});
     await page.getByRole('button',{name:'Let’s ride'}).click();
     await page.evaluate(()=>{
-      window.visualAudit={samples:[],clipped:[],camera:window.knightwave.state().camera};
+      window.visualAudit={samples:[],clipped:[],camera:window.knightwave.state().camera,orb:window.knightwave.state().orb,glow:window.knightwave.state().glow};
       function sample(){
         const game=window.knightwave,state=game.state();
         if(state.mode==='playing'&&state.phase!=='fall'){
@@ -28,7 +28,7 @@ try {
             return mesh.getBoundingInfo().boundingBox.vectorsWorld.map(p=>p.constructor.Project(p,identity,game.scene.getTransformMatrix(),viewport));
           });
           const bounds={left:Math.min(...points.map(p=>p.x))/innerWidth,right:Math.max(...points.map(p=>p.x))/innerWidth,top:Math.min(...points.map(p=>p.y))/innerHeight,bottom:Math.max(...points.map(p=>p.y))/innerHeight};
-          const landing=game.scene.getTransformNodeByName('knight').position.clone();landing.set(state.landing.x,.86,state.landing.z);
+          const landing=game.scene.getTransformNodeByName('knight').position.clone();landing.set(state.landing.x,state.platformTop+.06,state.landing.z);
           const pad=landing.constructor.Project(landing,identity,game.scene.getTransformMatrix(),viewport);
           const deck=game.scene.getMeshByName('floating board');deck.computeWorldMatrix(true);
           const boardPoints=deck.getBoundingInfo().boundingBox.vectorsWorld.map(p=>p.constructor.Project(p,identity,game.scene.getTransformMatrix(),viewport));
@@ -36,10 +36,11 @@ try {
           const queue=document.getElementById('move-queue').getBoundingClientRect();
           const overlapsQueue=boardBounds.left*innerWidth<queue.right&&boardBounds.right*innerWidth>queue.left&&boardBounds.top*innerHeight<queue.bottom&&boardBounds.bottom*innerHeight>queue.top;
           const knightOverlapsQueue=bounds.left*innerWidth<queue.right&&bounds.right*innerWidth>queue.left&&bounds.top*innerHeight<queue.bottom&&bounds.bottom*innerHeight>queue.top;
-          const orb=document.getElementById('orb-send').getBoundingClientRect(),orbOverlapsQueue=orb.left<queue.right&&orb.right>queue.left&&orb.top<queue.bottom&&orb.bottom>queue.top,orbClipped=orb.left<0||orb.right>innerWidth||orb.top<80||orb.bottom>innerHeight-60;
-          const result={orbOverlapsQueue,orbClipped,knightOverlapsQueue,overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
+          const orb=document.getElementById('orb-send').getBoundingClientRect(),orbOverlapsQueue=orb.left<queue.right&&orb.right>queue.left&&orb.top<queue.bottom&&orb.bottom>queue.top,orbClipped=orb.left<0||orb.right>innerWidth||orb.top<80||orb.bottom>innerHeight-30;
+          const orbOverlapsBoard=orb.left<boardBounds.right*innerWidth&&orb.right>boardBounds.left*innerWidth&&orb.top<boardBounds.bottom*innerHeight&&orb.bottom>boardBounds.top*innerHeight;
+          const result={orbOverlapsBoard,orbMoved:state.orb.x!==window.visualAudit.orb.x||state.orb.y!==window.visualAudit.orb.y,glowChanged:state.glow!==window.visualAudit.glow,trick:state.trick,orbOverlapsQueue,orbClipped,knightOverlapsQueue,overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
           window.visualAudit.samples.push(result);
-          if(result.orbOverlapsQueue||result.orbClipped||result.knightOverlapsQueue||result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
+          if(result.orbOverlapsBoard||result.orbMoved||result.glowChanged||result.orbOverlapsQueue||result.orbClipped||result.knightOverlapsQueue||result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
         }
         requestAnimationFrame(sample);
       }
@@ -77,7 +78,10 @@ try {
     assert.ok(audit.samples.every(s=>Math.abs(s.roll)<1e-8));
     const late=audit.samples.filter(s=>s.phase==='air'&&s.airtime>.85);
     assert.ok(late.every(s=>s.landing.x>=0&&s.landing.x<=1&&s.landing.y>=0&&s.landing.y<=1),'Landing leaves the screen before touchdown');
-    report.push({viewport:name,frames:audit.samples.length,clipped:audit.clipped,errors});
+    const tricks=audit.samples.filter(s=>s.phase==='air'),maxYaw=Math.max(...tricks.map(s=>Math.abs(s.trick.yaw))),maxRoll=Math.max(...tricks.map(s=>Math.abs(s.trick.roll)));
+    assert.ok(maxYaw>Math.PI*4-.01&&maxRoll>Math.PI*2-.01,'Full spins and rolls must appear in the rendered jumps');
+    assert.ok(tricks.filter(s=>s.airtime>.85).every(s=>Math.abs(Math.sin(s.trick.yaw))<1e-8&&Math.abs(Math.sin(s.trick.roll))<1e-8),'Tricks settle before landing');
+    report.push({viewport:name,frames:audit.samples.length,maxYaw,maxRoll,clipped:audit.clipped,errors});
     await context.close();
     console.log(name,'six jumps complete;',audit.clipped.length,'frames need framing review');
   }

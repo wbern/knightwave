@@ -1,25 +1,33 @@
 [
   {
     "viewport": "desktop",
-    "frames": 845,
+    "frames": 846,
+    "maxYaw": 12.566370614359172,
+    "maxRoll": 6.283185307179586,
     "clipped": [],
     "errors": []
   },
   {
     "viewport": "phone",
-    "frames": 843,
+    "frames": 856,
+    "maxYaw": 12.566370614359172,
+    "maxRoll": 6.283185307179586,
     "clipped": [],
     "errors": []
   },
   {
     "viewport": "compact",
-    "frames": 844,
+    "frames": 855,
+    "maxYaw": 12.566370614359172,
+    "maxRoll": 6.283185307179586,
     "clipped": [],
     "errors": []
   },
   {
     "viewport": "landscape",
-    "frames": 821,
+    "frames": 828,
+    "maxYaw": 12.566370614359172,
+    "maxRoll": 6.283185307179586,
     "clipped": [],
     "errors": []
   }

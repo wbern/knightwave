@@ -17,7 +17,7 @@ try{
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:315,y:650,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});assert.equal((await p.evaluate(()=>window.knightwave.state())).draft,0);await cdp.detach();
   await p.touchscreen.tap(310,630);await swipe(p,'up',320);let s=await p.evaluate(()=>window.knightwave.state());assert.equal(s.draft,0);assert.equal(s.moveQueue.length,1);assert.equal(s.selected,1,'Swiping from a side must dispatch the existing draft without an extra turn');
   await p.getByRole('button',{name:'Rotate knight right'}).tap();await p.getByRole('button',{name:'Rotate knight right'}).tap();
-  await p.getByRole('button',{name:'Send premove',exact:true}).tap();assert.equal((await p.evaluate(()=>window.knightwave.state())).moveQueue.at(-1).turns,2);
+  await p.getByRole('button',{name:'Dispatch composed premove',exact:true}).tap();assert.equal((await p.evaluate(()=>window.knightwave.state())).moveQueue.at(-1).turns,2);
   await swipe(p,'down');s=await p.evaluate(()=>window.knightwave.state());assert.equal(s.draft,2);assert.equal(s.moveQueue.length,1);
   await swipe(p);await p.waitForFunction(()=>window.knightwave.state().landings===1);
   await p.getByRole('button',{name:'Pause game'}).tap();const paused=await p.evaluate(()=>window.knightwave.state());await p.waitForTimeout(160);assert.deepEqual((await p.evaluate(()=>window.knightwave.state())).position,paused.position);

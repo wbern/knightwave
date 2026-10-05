@@ -2,6 +2,7 @@ import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {CELL_SIZE,createCircuit} from './src/board.js';
 import {knightDestination,rotateGrid} from './src/rules.js';
+import {PLATFORM_TOP} from './src/platforms.js';
 import {swipe} from './gestures.mjs';
 const url=process.env.KNIGHTWAVE_URL||'http://127.0.0.1:5179/';
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
@@ -24,12 +25,12 @@ try{
     const banner=await page.locator('#move-queue').evaluate(e=>({background:getComputedStyle(e).backgroundColor,border:getComputedStyle(e).borderWidth,height:e.getBoundingClientRect().height}));
     assert.equal(banner.background,'rgba(0, 0, 0, 0)');assert.equal(banner.border,'0px');assert.ok(banner.height<=48);
     const sceneCheck=await page.evaluate(()=>{const g=window.knightwave,s=g.scene;return {routes:s.meshes.some(m=>['complete circuit route','selected knight trace','your landing preview'].includes(m.name)),rims:s.meshes.filter(m=>m.name==='raised square rim').length,dividers:s.meshes.filter(m=>m.name==='raised square divider').length,floor:s.getMaterialByName('recessed light square').diffuseColor.toLuminance(),top:s.getMaterialByName('ivory chess square').diffuseColor.toLuminance(),knight:s.getMeshByName('turned chess pedestal').getTotalVertices()};});
-    assert.equal(sceneCheck.routes,false);assert.equal(sceneCheck.rims,18);assert.equal(sceneCheck.dividers,7);assert.ok(sceneCheck.top>sceneCheck.floor*3);assert.ok(sceneCheck.knight>100);
-    const initial=await state();assert.deepEqual(initial.board,{min:-4,max:3,cells:64,extent:16});assert.equal(await page.locator('#board-labels span').count(),16);
+    assert.equal(await page.locator('#flash').count(),0);assert.equal(await page.evaluate(()=>window.knightwave.scene.getTransformNodeByName('premove energy orb')),null);assert.equal((await state()).orb.location,'ui');assert.ok(PLATFORM_TOP-(-2.025)<1);assert.equal(sceneCheck.routes,false);assert.equal(sceneCheck.rims,18);assert.equal(sceneCheck.dividers,7);assert.ok(sceneCheck.top>sceneCheck.floor*3);assert.ok(sceneCheck.knight>100);
+    await page.evaluate(()=>window.knightwave.start());const initial=await state();assert.deepEqual(initial.board,{min:-4,max:3,cells:64,extent:16});assert.equal(await page.locator('#board-labels span').count(),16);
     if(phone)assert.deepEqual(initial.render,{width:780,height:1688});
     const projected=await page.evaluate(()=>{const g=window.knightwave,c=g.scene.activeCamera,I=g.scene.meshes[0].getWorldMatrix().constructor.Identity(),v=c.viewport.toGlobal(innerWidth,innerHeight);return [[-16,-16],[12,-16],[-16,12]].map(([x,z])=>{const p=g.scene.getTransformNodeByName('knight').position.clone();p.set(x,-2,z);return p.constructor.Project(p,I,g.scene.getTransformMatrix(),v).asArray();});});
     assert.ok(projected[1][0]>projected[0][0]&&Math.abs(projected[1][1]-projected[0][1])<.01);assert.ok(projected[2][1]<projected[0][1]&&Math.abs(projected[2][0]-projected[0][0])<.01);
-    await page.waitForTimeout(180);const moving=await state();assert.ok(moving.position.z>initial.position.z+.5);assert.ok(moving.platforms[2].height>initial.platforms[2].height);
+    await page.waitForFunction(z=>window.knightwave.state().position.z>z+.5,initial.position.z);const moving=await state();assert.ok(moving.position.z>initial.position.z+.5);assert.ok(moving.platforms[2].height>initial.platforms[2].height);
     await page.waitForFunction(()=>window.knightwave.state().phase==='waiting');const waiting=await state();
     await page.waitForTimeout(150);assert.equal((await state()).position.z,waiting.position.z);assert.equal(await page.evaluate(()=>window.knightwave.dispatch()),false);
     await press(1);assert.equal((await state()).draft,1);assert.equal((await state()).selected,0);assert.equal(await page.locator('#orb-glyphs .move-icon').count(),1);
@@ -49,7 +50,7 @@ try{
       }
       await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='air';},jump);
       const airborne=await state(),offset=rotateGrid(knightDestination(airborne.target),airborne.heading);
-      assert.equal(airborne.landing.x-airborne.launch.x,offset.x*CELL_SIZE);assert.equal(airborne.landing.z-airborne.launch.z,offset.z*CELL_SIZE);assert.deepEqual(airborne.camera,initial.camera);
+      assert.equal(airborne.landing.x-airborne.launch.x,offset.x*CELL_SIZE);assert.equal(airborne.landing.z-airborne.launch.z,offset.z*CELL_SIZE);assert.deepEqual(airborne.camera,initial.camera);assert.deepEqual(airborne.orb,initial.orb);assert.equal(airborne.glow,initial.glow);
       if(jump===3){
         await press(1);assert.equal((await state()).selected,-1,'Draft edits must not alter flight');await press(-1);
         await page.getByRole('button',{name:'Pause game'}).click();const paused=await state();await page.waitForTimeout(160);
@@ -59,12 +60,12 @@ try{
         await page.screenshot({path:`/tmp/knightwave-${name}-midair-final.png`});
       }
       await page.waitForFunction(n=>window.knightwave.state().landings===n,jump,{timeout:6000});const landed=await state();
-      assert.equal(landed.lastLanding.x,airborne.landing.x);assert.equal(landed.lastLanding.z,airborne.landing.z);assert.deepEqual(landed.camera,initial.camera);assert.equal(landed.platforms[jump-1].stage,'falling');
+      assert.deepEqual(landed.trick,{yaw:0,roll:0,pitch:0});assert.equal(landed.glow,initial.glow);assert.equal(landed.lastLanding.x,airborne.landing.x);assert.equal(landed.lastLanding.z,airborne.landing.z);assert.deepEqual(landed.camera,initial.camera);assert.equal(landed.platforms[jump-1].stage,'falling');
       if(jump===1){await page.waitForTimeout(120);assert.ok((await state()).platforms[0].height<landed.platforms[0].height);}
     }
     const audit=await page.evaluate(()=>window.landingAudit);assert.equal(audit.length,6);
     for(let i=0;i<6;i++){assert.equal(audit[i].position.x,createCircuit()[i+1].x*CELL_SIZE);assert.equal(audit[i].position.z,createCircuit()[i+1].z*CELL_SIZE);assert.deepEqual(audit[i].camera,initial.camera);}
-    const won=await state();assert.equal(won.mode,'won');assert.equal(won.combo,6);const home=createCircuit()[0];assert.deepEqual(won.position,{x:home.x*CELL_SIZE,y:.8+.06,z:home.z*CELL_SIZE});
+    const won=await state();assert.equal(won.mode,'won');assert.equal(won.combo,6);const home=createCircuit()[0];assert.deepEqual(won.position,{x:home.x*CELL_SIZE,y:PLATFORM_TOP+.06,z:home.z*CELL_SIZE});
     await page.screenshot({path:`/tmp/knightwave-${name}-win-final.png`});await page.getByRole('button',{name:'Ride again'}).click();assert.equal((await state()).moveQueue.length,0);assert.equal((await state()).draft,0);
     await page.getByRole('button',{name:'Mute soundtrack'}).click();assert.equal((await state()).audio.muted,true);await page.getByRole('button',{name:'Unmute soundtrack'}).click();
     await page.getByRole('button',{name:'How to play'}).click();assert.equal(await page.getByRole('dialog').count(),1);await page.getByRole('button',{name:'Got it'}).click();
