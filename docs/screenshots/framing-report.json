@@ -1,7 +1,7 @@
 [
   {
     "viewport": "desktop",
-    "frames": 846,
+    "frames": 661,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],
@@ -9,7 +9,7 @@
   },
   {
     "viewport": "phone",
-    "frames": 856,
+    "frames": 735,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],
@@ -17,7 +17,7 @@
   },
   {
     "viewport": "compact",
-    "frames": 855,
+    "frames": 728,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],
@@ -25,7 +25,7 @@
   },
   {
     "viewport": "landscape",
-    "frames": 828,
+    "frames": 709,
     "maxYaw": 12.566370614359172,
     "maxRoll": 6.283185307179586,
     "clipped": [],

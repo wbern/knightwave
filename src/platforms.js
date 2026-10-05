@@ -1,5 +1,5 @@
 export const PLATFORM_TOP=-1.1;
-export const CRUISE_SPEED=5.2;
+export const LANDING_DWELL=.30;
 const clamp=value=>Math.max(0,Math.min(1,value));
 export function platformStage(index,current){
   return index<current?'falling':index===current?'occupied':index===current+1?'target':index===current+2?'rising':'future';

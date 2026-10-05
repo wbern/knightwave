@@ -22,17 +22,17 @@ Open the printed local URL. `npm run build` produces the standalone browser game
 - Press Space or swipe upward to dispatch the group for one upcoming platform. The draft clears so you can compose the next group. Tapping the orb is an alternative to the swipe.
 - The borderless banner contains only your dispatched premoves. Thin vertical dividers separate platform groups; it never displays the correct answer automatically. Icons show the actual orientation of their moves. Long queues scroll horizontally on touchscreens.
 - Each tap chains a quarter-turned knight move. Right destinations in grid units are `(1,2)`, `(3,1)`, `(2,-1)`, then `(0,0)`. Left mirrors the horizontal coordinate. The next group follows the previous group's final heading.
-- The knight rides along each platform at 5.2 world units per second. At the edge, it executes the next dispatched group. If no group is ready, it waits for you. Once takeoff begins, that group is locked; edits in the orb prepare future jumps. The banner underlines the executing group's flight progress and removes it at touchdown.
+- Each platform occupies one square. The knight jumps directly from its center using the next dispatched group, with a 0.30-second settling pause between queued jumps. If no group is ready, it waits for you. Once takeoff begins, that group is locked; edits in the orb prepare future jumps. The banner underlines the executing group's flight progress and removes it at touchdown.
 - Swipe down or press Backspace to clear an unsent draft, then recall the last unstarted group for correction. A group already in flight cannot be recalled. Empty sends are ignored, and a full six-platform queue cannot accept extra groups.
 - Escape or the pause button pauses; M toggles sound. Space starts or retries when outside a run. A wrong dispatched move ends the attempt; six correct landings complete the circuit. Both outcomes offer immediate retry.
-- Platforms rise ahead and fall behind. Board trails, route arrows and landing-preview rings are absent. Every L leg fits within the board, and raised runways do not intersect. The circuit is in `src/board.js`.
+- Platforms rise ahead and fall behind. Board trails, route arrows and landing-preview rings are absent. Every L leg fits within the board, and single-square platforms do not overlap. The circuit is in `src/board.js`.
 - The best circuit score is stored on this device under `knightwave-board-best` when storage is available.
 
 The interaction refinement and primary research sources are recorded in [the premove orb design notes](docs/design/premove-orb.md).
 
 ## Graphics and audio
 
-The camera is fixed above the front edge at roughly 44 degrees with orthographic projection. Files stay horizontal and ranks stay vertical on screen, so the board keeps its chess orientation while height remains visible. The checkerboard uses 64 recessed squares in two dark tones and standard chess coordinates. Eighteen shared physical rails form a raised rim around every square; raised platforms have brighter tops, side faces and a divider rim between their two squares. Responsive framing keeps the board, move strip and controls apart on desktop, portrait phones and landscape screens.
+The camera is fixed above the front edge at roughly 44 degrees with orthographic projection. Files stay horizontal and ranks stay vertical on screen, so the board keeps its chess orientation while height remains visible. The checkerboard uses 64 recessed squares in two dark tones and standard chess coordinates. Eighteen shared physical rails form a raised rim around every square; raised platforms have brighter tops, side faces and rims around each single square. Responsive framing keeps the board, move strip and controls apart on desktop, portrait phones and landscape screens.
 
 `src/knight.js` builds an original porcelain chess knight from sculpted neck and muzzle sections, paired ears, eyes, a carved mane and a turned pedestal. It follows rounded airborne bends, rocks immediately on input and briefly compresses on landing. A centered trick pivot adds a complete shuv-it, a barrel roll for longer chains, and a double spin for three or more L moves. Tricks settle before touchdown, facing the next platform; chess landing coordinates remain exact. A directional light casts soft shadows from the knight and decks onto the board; a separate shadow directly beneath the piece makes its ground position readable throughout flight. The 4.8-unit jump arc visibly lifts the whole piece, and a slim underline on the executing premove group tracks flight progress without revealing a route. Jump sparkles use a dedicated star texture and particle system. The mark, favicon and L glyphs are hand-drawn vector assets; the earlier `public/knight-piece.svg` remains as source artwork.
 
@@ -46,7 +46,7 @@ The original soundtrack, *Stardust Overdrive*, is synthesized in Web Audio: four
 
 ## Verification
 
-`npm test` checks chained movement, mirrored turns, corrections, exact L trajectories, rotated landing directions, circuit closure, bounded paths, nonintersecting runways, platform rise/fall lifecycles and exact agreement between each rotated/mirrored icon and its physical L legs.
+`npm test` checks chained movement, mirrored turns, corrections, exact L trajectories, rotated landing directions, circuit closure, bounded paths, single-square platforms without overlaps, platform rise/fall lifecycles and exact agreement between each rotated/mirrored icon and its physical L legs.
 
 `src/premoves.test.js` checks draft isolation, FIFO dispatch, group orientations, flight locking, recall, empty/full queue boundaries and swipe discrimination. `src/flight.test.js` verifies exact endpoints, mirrored rounded routes, continuous heading, steady travel speed and complete tricks that settle before touchdown.
 

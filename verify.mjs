@@ -24,13 +24,13 @@ try{
     assert.equal(await page.locator('#queue-track .move-group').count(),0,'Banner must not reveal the answers');
     const banner=await page.locator('#move-queue').evaluate(e=>({background:getComputedStyle(e).backgroundColor,border:getComputedStyle(e).borderWidth,height:e.getBoundingClientRect().height}));
     assert.equal(banner.background,'rgba(0, 0, 0, 0)');assert.equal(banner.border,'0px');assert.ok(banner.height<=48);
-    const sceneCheck=await page.evaluate(()=>{const g=window.knightwave,s=g.scene;return {routes:s.meshes.some(m=>['complete circuit route','selected knight trace','your landing preview'].includes(m.name)),rims:s.meshes.filter(m=>m.name==='raised square rim').length,dividers:s.meshes.filter(m=>m.name==='raised square divider').length,floor:s.getMaterialByName('recessed light square').diffuseColor.toLuminance(),top:s.getMaterialByName('ivory chess square').diffuseColor.toLuminance(),knight:s.getMeshByName('turned chess pedestal').getTotalVertices()};});
-    assert.equal(await page.locator('#flash').count(),0);assert.equal(await page.evaluate(()=>window.knightwave.scene.getTransformNodeByName('premove energy orb')),null);assert.equal((await state()).orb.location,'ui');assert.ok(PLATFORM_TOP-(-2.025)<1);assert.equal(sceneCheck.routes,false);assert.equal(sceneCheck.rims,18);assert.equal(sceneCheck.dividers,7);assert.ok(sceneCheck.top>sceneCheck.floor*3);assert.ok(sceneCheck.knight>100);
+    const sceneCheck=await page.evaluate(()=>{const g=window.knightwave,s=g.scene;return {routes:s.meshes.some(m=>['complete circuit route','selected knight trace','your landing preview'].includes(m.name)),rims:s.meshes.filter(m=>m.name==='raised square rim').length,dividers:s.meshes.filter(m=>m.name==='raised square divider').length,squares:s.meshes.filter(m=>m.name==='raised chess square').length,decks:s.meshes.filter(m=>m.name==='raised platform deck').map(m=>m.getBoundingInfo().boundingBox.extendSize.asArray()),floor:s.getMaterialByName('recessed light square').diffuseColor.toLuminance(),top:s.getMaterialByName('ivory chess square').diffuseColor.toLuminance(),knight:s.getMeshByName('turned chess pedestal').getTotalVertices()};});
+    assert.equal(await page.locator('#flash').count(),0);assert.equal(await page.evaluate(()=>window.knightwave.scene.getTransformNodeByName('premove energy orb')),null);assert.equal((await state()).orb.location,'ui');assert.ok(PLATFORM_TOP-(-2.025)<1);assert.equal(sceneCheck.routes,false);assert.equal(sceneCheck.rims,18);assert.equal(sceneCheck.dividers,0);assert.equal(sceneCheck.squares,7);for(const [width,height,depth] of sceneCheck.decks){assert.ok(Math.abs(width-depth)<1e-6);assert.ok(width*2<CELL_SIZE);}assert.ok(sceneCheck.top>sceneCheck.floor*3);assert.ok(sceneCheck.knight>100);
     await page.evaluate(()=>window.knightwave.start());const initial=await state();assert.deepEqual(initial.board,{min:-4,max:3,cells:64,extent:16});assert.equal(await page.locator('#board-labels span').count(),16);
     if(phone)assert.deepEqual(initial.render,{width:780,height:1688});
     const projected=await page.evaluate(()=>{const g=window.knightwave,c=g.scene.activeCamera,I=g.scene.meshes[0].getWorldMatrix().constructor.Identity(),v=c.viewport.toGlobal(innerWidth,innerHeight);return [[-16,-16],[12,-16],[-16,12]].map(([x,z])=>{const p=g.scene.getTransformNodeByName('knight').position.clone();p.set(x,-2,z);return p.constructor.Project(p,I,g.scene.getTransformMatrix(),v).asArray();});});
     assert.ok(projected[1][0]>projected[0][0]&&Math.abs(projected[1][1]-projected[0][1])<.01);assert.ok(projected[2][1]<projected[0][1]&&Math.abs(projected[2][0]-projected[0][0])<.01);
-    await page.waitForFunction(z=>window.knightwave.state().position.z>z+.5,initial.position.z);const moving=await state();assert.ok(moving.position.z>initial.position.z+.5);assert.ok(moving.platforms[2].height>initial.platforms[2].height);
+    await page.waitForTimeout(180);const ready=await state();assert.equal(ready.position.x,initial.position.x);assert.equal(ready.position.z,initial.position.z);assert.ok(ready.platforms[2].height>initial.platforms[2].height);assert.deepEqual(ready.launch,{x:ready.position.x,z:ready.position.z});
     await page.waitForFunction(()=>window.knightwave.state().phase==='waiting');const waiting=await state();
     await page.waitForTimeout(150);assert.equal((await state()).position.z,waiting.position.z);assert.equal(await page.evaluate(()=>window.knightwave.dispatch()),false);
     await press(1);assert.equal((await state()).draft,1);assert.equal((await state()).selected,0);assert.equal(await page.locator('#orb-glyphs .move-icon').count(),1);
@@ -44,12 +44,12 @@ try{
     for(let jump=1;jump<=6;jump++){
       const before=await state();if(before.landings>=jump)continue;
       if(jump>3){
-        await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&['cruise','waiting'].includes(s.phase);},jump);
+        await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&['settle','waiting'].includes(s.phase);},jump);
         const target=(await state()).target;for(let i=0;i<Math.abs(target);i++)await press(Math.sign(target));
         assert.equal(await page.locator('#orb-glyphs .move-icon').count(),Math.abs(target));await send();assert.equal((await state()).draft,0);
       }
-      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='air';},jump);
-      const airborne=await state(),offset=rotateGrid(knightDestination(airborne.target),airborne.heading);
+      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='air'&&s.airtime>.04;},jump);
+      const airborne=await state();assert.ok(Math.hypot(airborne.position.x-airborne.launch.x,airborne.position.z-airborne.launch.z)>0);const offset=rotateGrid(knightDestination(airborne.target),airborne.heading);
       assert.equal(airborne.landing.x-airborne.launch.x,offset.x*CELL_SIZE);assert.equal(airborne.landing.z-airborne.launch.z,offset.z*CELL_SIZE);assert.deepEqual(airborne.camera,initial.camera);assert.deepEqual(airborne.orb,initial.orb);assert.equal(airborne.glow,initial.glow);
       if(jump===3){
         await press(1);assert.equal((await state()).selected,-1,'Draft edits must not alter flight');await press(-1);

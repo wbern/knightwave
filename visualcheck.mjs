@@ -54,7 +54,7 @@ try {
     await page.waitForTimeout(200);await capture('board');
     await page.waitForFunction(()=>window.knightwave.state().phase==='waiting');await capture('waiting');
     for(let jump=1;jump<=6;jump++){
-      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&['cruise','waiting'].includes(s.phase);},jump);
+      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&['settle','waiting'].includes(s.phase);},jump);
       const target=await page.evaluate(()=>window.knightwave.state().target);
       for(let turn=0;turn<Math.abs(target);turn++){
         if(phone)await page.getByRole('button',{name:target>0?'Rotate knight right':'Rotate knight left'}).tap();

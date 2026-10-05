@@ -24,8 +24,10 @@ test('every landing and intermediate L leg stays inside the finite board',()=>{
   assert.ok(!isOnBoard({x:BOARD_MAX+.01,z:0}));
 });
 
-test('raised runways do not intersect while upcoming platforms rise',()=>{
-  const rectangles=createCircuit().slice(0,-1).map(p=>({left:Math.min(p.x,p.launch.x)-.4625,right:Math.max(p.x,p.launch.x)+.4625,bottom:Math.min(p.z,p.launch.z)-.4625,top:Math.max(p.z,p.launch.z)+.4625}));
+test('single-square platforms launch from their centers and never overlap',()=>{
+  const stops=createCircuit();
+  for(const stop of stops)assert.deepEqual(stop.launch,{x:stop.x,z:stop.z,heading:stop.heading});
+  const rectangles=stops.slice(0,-1).map(p=>({left:p.x-.4625,right:p.x+.4625,bottom:p.z-.4625,top:p.z+.4625}));
   for(let i=0;i<rectangles.length;i++)for(const b of rectangles.slice(0,i)){
     const a=rectangles[i];
     assert.ok(!(a.left<b.right&&a.right>b.left&&a.bottom<b.top&&a.top>b.bottom));

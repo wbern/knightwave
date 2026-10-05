@@ -18,7 +18,7 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
 import { knightDestination, isLandingMatch, rotateGrid } from './rules.js';
 import { BOARD_MIN, BOARD_MAX, BOARD_CELLS, BOARD_CENTER, CELL_SIZE, createCircuit } from './board.js';
-import { PLATFORM_TOP, CRUISE_SPEED, platformStage, platformPose } from './platforms.js';
+import { PLATFORM_TOP, LANDING_DWELL, platformStage, platformPose } from './platforms.js';
 import {flightPose,trickPose} from './flight.js';
 import { moveGlyphs } from './moves.js';
 import { createKnight } from './knight.js';
@@ -86,7 +86,7 @@ jumpSparkles.blendMode=ParticleSystem.BLENDMODE_ADD;jumpSparkles.emitRate=0;jump
 const burstPieces=[];for(let i=0;i<20;i++){const m=MeshBuilder.CreateSphere('landing sparkle',{diameter:.16,segments:5},scene);m.material=i%2?mint:gold;m.setEnabled(false);burstPieces.push({mesh:m,velocity:new Vector3(),life:0});}
 const circuit=createCircuit(),premoves=new Premoves(circuit.length-1);
 let orbKick=0,sendFlash=0,orbScreen={x:0,y:0},gesture=null,progressElement=null;
-let mode='start',phase='cruise',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,spinJuice=0,airDuration=1.25,tapKick=0,lastGuideKey='',lastLanding=null;
+let mode='start',phase='waiting',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,spinJuice=0,airDuration=1.25,tapKick=0,lastGuideKey='',lastLanding=null;
 const GROUND=PLATFORM_TOP+.06;
 let best=0;try{best=Number(localStorage.getItem('knightwave-board-best')||0);}catch{}
 el('best').textContent=String(best).padStart(5,'0');
@@ -114,21 +114,17 @@ const platformAccent=material('platform edge','#b0e4d5',.55);
 const fallingAccent=material('departed platform rails','#ae6288',.25);
 const platforms=circuit.map((stop,i)=>{
   const root=new TransformNode('platform '+i,scene);root.position.set(stop.x*CELL_SIZE,PLATFORM_TOP,stop.z*CELL_SIZE);root.rotation.y=stop.heading;root.parent=board;
-  const length=stop.runLength*CELL_SIZE;
-  const deck=box('raised platform deck',3.7,.35,length+3.7,0,-.175,length/2,platformMaterials.occupied,root);
-  box('platform lift column',2.15,.55,length+2.1,0,-.625,length/2,platformMaterials.occupied,root);
+  const deck=box('raised platform deck',3.7,.35,3.7,0,-.175,0,platformMaterials.occupied,root);
+  box('platform lift column',2.15,.55,2.15,0,-.625,0,platformMaterials.occupied,root);
   const trims=[];
-  for(const side of [-1,1])trims.push(box('platform glow rail',.07,.07,length+3.7,side*1.86,.03,length/2,mint,root));
-  for(const z of [-1.85,length+1.85])trims.push(box('platform end rail',3.78,.07,.075,0,.03,z,mint,root));
-  for(let row=0;row<stop.runLength;row++)trims.push(box('raised square divider',3.78,.14,.08,0,.045,(row+.5)*CELL_SIZE,platformAccent,root));
-  const surfaces=[];
-  for(let row=0;row<=stop.runLength;row++){
-    const offset=rotateGrid({x:0,z:row},stop.heading),light=(stop.x+offset.x+stop.z+offset.z)%2!==0;
-    const square=box('raised chess square',3.58,.025,3.58,0,.01,row*CELL_SIZE,light?lightSquare:darkSquare,root);
-    square.receiveShadows=true;surfaces.push(square);glow.addExcludedMesh(square);
+  for(const side of [-1,1]){
+    trims.push(box('platform glow rail',.07,.07,3.7,side*1.86,.03,0,platformAccent,root));
+    trims.push(box('platform end rail',3.78,.07,.075,0,.03,side*1.85,platformAccent,root));
   }
+  const square=box('raised chess square',3.58,.025,3.58,0,.01,0,(stop.x+stop.z)%2!==0?lightSquare:darkSquare,root);
+  square.receiveShadows=true;glow.addExcludedMesh(square);
   for(const mesh of root.getChildMeshes())shadows.addShadowCaster(mesh);
-  return {root,deck,trims,surfaces,stage:null,age:0};
+  return {root,deck,trims,stage:null,age:0};
 });
 function updatePlatforms(dt,reset=false){
   for(let i=0;i<platforms.length;i++){
@@ -166,7 +162,7 @@ function fitBoardCamera(){
 function visible(id,on){el(id).classList.toggle('hidden',!on);}
 function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode==='playing'||mode==='paused');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');visible('move-queue',mode==='playing'||mode==='paused');visible('orb-send',mode==='playing'||mode==='paused');visible('gesture-caption',mode==='playing');}
 function start(){
-  premoves.reset();orbKick=0;sendFlash=0;gesture=null;current=0;lastLanding=null;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';trick.rotation.set(0,0,0);
+  premoves.reset();orbKick=0;sendFlash=0;gesture=null;current=0;lastLanding=null;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='waiting';trick.rotation.set(0,0,0);
   spinner.rotation.set(0,FORWARD_YAW,0);knight.scaling.setAll(1.38);tapKick=0;jumpSparkles.reset();jumpSparkles.start();airDuration=1.25;knight.position.copyFrom(worldCell(circuit[0]));
   el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();updatePlatforms(0,true);fitBoardCamera();updateOrb(0);
 }
@@ -225,7 +221,7 @@ function modal(content){el('modal').innerHTML=`<div class="dialog" role="dialog"
 function pause(){if(mode==='playing'){setMode('paused');audio.stop();modal('<div class="eyebrow">TAKE A BREATHER</div><h2 id="dialog-title">Still in the groove.</h2><p>Your circuit will be right here.</p><button class="primary" id="resume">Keep riding <span>↗</span></button><button class="secondary" id="restart">Start a fresh run</button>');el('resume').onclick=resume;el('restart').onclick=start;}else if(mode==='paused')resume();}
 function resume(){visible('modal',false);setMode('playing');audio.start().catch(()=>{});el('world').focus();}
 function help(){const previous=mode;if(mode==='playing'){setMode('paused');audio.stop();}
-  modal('<div class="eyebrow">A KNIGHT TO REMEMBER</div><h2 id="dialog-title">Charge. Send. Jump.</h2><div class="how-steps"><span class="number">1</span><p>Bright platforms are raised and safe to land on. Dark squares sit below. Plan on the a–h, 1–8 chessboard.</p></div><div class="how-steps"><span class="number">2</span><p>Tap the left or right side, or use ← / →, to compose L moves in the energy orb between the controls. Two squares along the icon’s stem, one across its arrow. An opposite tap undoes a turn.</p></div><div class="how-steps"><span class="number">3</span><p>Swipe up or press Space to send one group for one platform. The orb clears for the next group. Your banner shows only moves you have sent; each divider separates platforms. You can also tap the orb to send.</p></div><div class="how-steps"><span class="number">4</span><p>The knight jumps at the edge using the next sent group. If none is ready, it waits for you. During a jump, compose later groups in the orb. Swipe down or press Backspace to clear a draft, then recall the last unstarted group. Escape pauses.</p></div><button class="primary" id="close-help">Got it <span>↗</span></button>');el('close-help').onclick=()=>{visible('modal',false);if(previous==='playing')resume();};}
+  modal('<div class="eyebrow">A KNIGHT TO REMEMBER</div><h2 id="dialog-title">Charge. Send. Jump.</h2><div class="how-steps"><span class="number">1</span><p>Bright platforms are raised and safe to land on. Dark squares sit below. Plan on the a–h, 1–8 chessboard.</p></div><div class="how-steps"><span class="number">2</span><p>Tap the left or right side, or use ← / →, to compose L moves in the energy orb between the controls. Two squares along the icon’s stem, one across its arrow. An opposite tap undoes a turn.</p></div><div class="how-steps"><span class="number">3</span><p>Swipe up or press Space to send one group for one platform. The orb clears for the next group. Your banner shows only moves you have sent; each divider separates platforms. You can also tap the orb to send.</p></div><div class="how-steps"><span class="number">4</span><p>The knight jumps from the center of its square using the next sent group. It pauses briefly after landing, and waits for you if no group is ready. During a jump, compose later groups in the orb. Swipe down or press Backspace to clear a draft, then recall the last unstarted group. Escape pauses.</p></div><button class="primary" id="close-help">Got it <span>↗</span></button>');el('close-help').onclick=()=>{visible('modal',false);if(previous==='playing')resume();};}
 function finish(won=false){
   setMode(won?'won':'over');jumpSparkles.emitRate=0;
   if(score>best){best=score;try{localStorage.setItem('knightwave-board-best',String(best));}catch{}el('best').textContent=String(best).padStart(5,'0');}
@@ -280,12 +276,10 @@ function update(dt){
   if(mode==='playing'){
     runTime+=dt;phaseTime+=dt;spinJuice=Math.max(0,spinJuice-dt*4);tapKick*=Math.exp(-dt*14);
     const origin=circuit[current];
-    if(phase==='cruise'){
-      const distance=Math.min(origin.runLength*CELL_SIZE,phaseTime*CRUISE_SPEED),offset=rotateGrid({x:0,z:distance},origin.heading);
-      knight.position.set(origin.x*CELL_SIZE+offset.x,GROUND+Math.sin(distance*2.6)*.025,origin.z*CELL_SIZE+offset.z);
-      spinner.rotation.y=FORWARD_YAW+origin.heading+tapKick;spinner.rotation.z=-tapKick*.25;spinner.rotation.x=-.06+Math.sin(distance*2.6)*.035;
-
-      if(distance>=origin.runLength*CELL_SIZE&&!beginJump()){phase='waiting';phaseTime=0;}
+    if(phase==='settle'){
+      knight.position.set(origin.x*CELL_SIZE,GROUND,origin.z*CELL_SIZE);
+      spinner.rotation.set(0,FORWARD_YAW+origin.heading+tapKick,-tapKick*.25);
+      if(phaseTime>=LANDING_DWELL&&!beginJump()){phase='waiting';phaseTime=0;}
     }else if(phase==='waiting'){
       knight.position.set(origin.launch.x*CELL_SIZE,GROUND+Math.sin(phaseTime*3)*.025,origin.launch.z*CELL_SIZE);spinner.rotation.y=FORWARD_YAW+origin.heading+tapKick;spinner.rotation.x=0;spinner.rotation.z=-tapKick*.25;
     }else if(phase==='air'){
@@ -300,19 +294,19 @@ function update(dt){
           lastLanding={x:knight.position.x,y:knight.position.y,z:knight.position.z};premoves.complete();current++;landings++;combo++;score+=100+combo*25+Math.abs(selected)*10;el('score').textContent=String(score).padStart(5,'0');
           burst();audio.land(combo);selected=0;trick.rotation.set(0,0,0);spinner.rotation.set(0,FORWARD_YAW+circuit[current].heading,0);updatePlatforms(0);
           if(current===circuit.length-1){finish(true);}
-          else{phase='cruise';phaseTime=0;lastGuideKey='';updateGuides();}
+          else{phase='settle';phaseTime=0;lastGuideKey='';updateGuides();}
         }else{phase='fall';phaseTime=0;audio.fall();}
       }
     }else if(phase==='fall'){knight.position.y-=dt*(6+phaseTime*12);if(phaseTime>.70)finish();}
   }
   if(mode==='playing'||mode==='start'||mode==='won'){
     updatePlatforms(dt);
-    const squash=phase==='cruise'?Math.max(0,1-phaseTime/.18)*.12:0;
+    const squash=phase==='settle'?Math.max(0,1-phaseTime/.18)*.12:0;
     knight.scaling.set(1.38*(1+squash/2),1.38*(1-squash),1.38*(1+squash/2));
     const abovePlatform=platforms.some((p,i)=>{
       if(!p.root.isEnabled()||p.stage==='falling'||p.root.position.y<PLATFORM_TOP-.1)return false;
-      const stop=circuit[i],local=rotateGrid({x:knight.position.x-stop.x*CELL_SIZE,z:knight.position.z-stop.z*CELL_SIZE},-stop.heading);
-      return Math.abs(local.x)<1.85&&local.z>-1.85&&local.z<stop.runLength*CELL_SIZE+1.85;
+      const stop=circuit[i];
+      return Math.abs(knight.position.x-stop.x*CELL_SIZE)<1.85&&Math.abs(knight.position.z-stop.z*CELL_SIZE)<1.85;
     });
     const surface=abovePlatform?PLATFORM_TOP+.05:-2.015,altitude=Math.max(0,knight.position.y-surface);
     shadow.position.set(knight.position.x,surface,knight.position.z);shadow.scaling.setAll(1.38+altitude*.06);
@@ -324,7 +318,7 @@ function update(dt){
 engine.runRenderLoop(()=>{const dt=Math.min(engine.getDeltaTime()/1000,.05);update(dt);scene.updateTransformMatrix();updateOrb(mode==='playing'?dt:0);scene.render();});
 scene.executeWhenReady(()=>{visible('loading',false);});
 document.fonts.ready.then(fitBoardCamera);
-const state=()=>({mode,phase,selected,draft:premoves.draft,draftHeading:premoves.draftHeading(circuit[current].heading),locked:premoves.locked,orb:{x:orbScreen.x,y:orbScreen.y,location:'ui'},target:circuit[current+1]?.turns,jump:landings+1,score,combo,landings,totalLandings:circuit.length-1,lastLanding,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},planning:phase==='waiting'?1:Math.min(1,phaseTime*CRUISE_SPEED/(circuit[current].runLength*CELL_SIZE)),airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{min:BOARD_MIN,max:BOARD_MAX,cells:cells.length,extent:boardWidth/2},heading:circuit[current]?.heading,landingHeading:circuit[current+1]?.heading,launch:{x:circuit[current].launch.x*CELL_SIZE,z:circuit[current].launch.z*CELL_SIZE},landing:circuit[current+1]?{x:circuit[current+1].x*CELL_SIZE,z:circuit[current+1].z*CELL_SIZE}:null,render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},platforms:platforms.map((p,i)=>({index:i,stage:p.stage,height:p.root.position.y,visible:p.root.isEnabled()})),speed:CRUISE_SPEED,moveQueue:premoves.groups.map(g=>({...g})),camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,trick:{yaw:trick.rotation.y,roll:trick.rotation.z,pitch:trick.rotation.x},platformTop:PLATFORM_TOP,glow:glow.intensity,sparkles:jumpSparkles.getActiveCount()});
+const state=()=>({mode,phase,selected,draft:premoves.draft,draftHeading:premoves.draftHeading(circuit[current].heading),locked:premoves.locked,orb:{x:orbScreen.x,y:orbScreen.y,location:'ui'},target:circuit[current+1]?.turns,jump:landings+1,score,combo,landings,totalLandings:circuit.length-1,lastLanding,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},planning:phase==='waiting'?1:phase==='settle'?Math.min(1,phaseTime/LANDING_DWELL):0,airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{min:BOARD_MIN,max:BOARD_MAX,cells:cells.length,extent:boardWidth/2},heading:circuit[current]?.heading,landingHeading:circuit[current+1]?.heading,launch:{x:circuit[current].launch.x*CELL_SIZE,z:circuit[current].launch.z*CELL_SIZE},landing:circuit[current+1]?{x:circuit[current+1].x*CELL_SIZE,z:circuit[current+1].z*CELL_SIZE}:null,render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},platforms:platforms.map((p,i)=>({index:i,stage:p.stage,height:p.root.position.y,visible:p.root.isEnabled()})),landingDwell:LANDING_DWELL,moveQueue:premoves.groups.map(g=>({...g})),camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,trick:{yaw:trick.rotation.y,roll:trick.rotation.z,pitch:trick.rotation.x},platformTop:PLATFORM_TOP,glow:glow.intensity,sparkles:jumpSparkles.getActiveCount()});
 // Observability for playtesting; actions are the same as keyboard and touch.
 window.knightwave={state,start,turn,dispatch,recall,pause,resume,mute,engine,scene};
 if(document.modelContext?.registerTool){
