@@ -21,6 +21,7 @@ import { BOARD_MIN, BOARD_MAX, BOARD_CELLS, BOARD_CENTER, CELL_SIZE, createCircu
 import { PLATFORM_TOP, CRUISE_SPEED, platformStage, platformPose } from './platforms.js';
 import { moveGlyphs } from './moves.js';
 import { createKnight } from './knight.js';
+import { Premoves, verticalGesture } from './premoves.js';
 import { Soundtrack } from './audio.js';
 
 const asset=name=>`${import.meta.env.BASE_URL}${name}`;
@@ -28,13 +29,15 @@ const app=document.querySelector('#app');
 app.innerHTML=`<canvas id="world" aria-label="Knightwave 3D chess circuit"></canvas>
 <div id="ui" class="start-mode">
   <header class="topbar"><div class="brand"><img class="brand-icon" src="${asset('knight-mark.svg')}" alt="" width="35" height="35"><div class="brand-name">knightwave<small>AN ARCADE DAYDREAM</small></div></div><div class="stats"><div class="stat"><small>SCORE</small><strong id="score">00000</strong></div><div class="stat"><small>BEST</small><strong id="best">00000</strong></div></div><div class="utility"><button class="icon-button" id="sound" aria-label="Mute soundtrack" title="Sound on/off (M)">♫</button><button class="icon-button hidden" id="pause" aria-label="Pause game" title="Pause (Esc)">Ⅱ</button><button class="icon-button" id="help" aria-label="How to play" title="How to play">?</button></div></header>
-  <section class="center-card" id="start-screen"><div class="eyebrow">CHESS MOVES. COSMIC GROOVES.</div><h1>Ride the<span>knightwave.</span></h1><p class="intro">A little chess. A little foresight.<br>Read the moves. Find the rhythm.<br>Bring your knight back home.</p><button class="primary" id="start">Let’s ride <span>↗</span></button><div class="start-caption">SOUND ON. SHOULDERS DOWN. CHASE THE GLOW.</div></section>
+  <section class="center-card" id="start-screen"><div class="eyebrow">CHESS MOVES. COSMIC GROOVES.</div><h1>Ride the<span>knightwave.</span></h1><p class="intro">A little chess. A little foresight.<br>Charge the orb. Send your moves.<br>Bring your knight back home.</p><button class="primary" id="start">Let’s ride <span>↗</span></button><div class="start-caption">TAP TO COMPOSE. SEND TO JUMP.</div></section>
   <div class="run-label hidden" id="run-label">THE CIRCUIT <span> / </span> <span id="jump-label">JUMP 01</span></div>
-  <section id="move-queue" class="move-queue hidden" aria-label="Upcoming knight moves"><div class="queue-heading"><span class="queue-now">NOW</span><span>UP NEXT</span></div><div class="queue-window"><div id="queue-track" class="queue-track"></div></div><div class="premove"><span>YOUR PREMOVE</span><div id="queued-moves" class="queued-moves"></div><svg id="flight-indicator" class="flight-indicator" viewBox="0 0 100 40" role="img" aria-label="Jump progress"><path class="flight-ground" d="M8 33H92"/><path class="flight-arc" d="M10 30Q50 -14 90 30"/><circle id="flight-dot" cx="10" cy="30" r="4"/></svg></div></section>
+  <section id="move-queue" class="move-queue hidden" aria-label="Dispatched premoves"><div class="queue-window"><div id="queue-track" class="queue-track"></div></div></section>
+  <button id="orb-send" class="orb-send hidden" aria-label="Dispatch premove"><span id="orb-glyphs" class="orb-glyphs"></span></button>
   <div id="board-labels" class="board-labels" aria-hidden="true"></div>
   <div class="flash" id="flash"></div>
-  <div class="touch-controls" id="touch-controls"><button class="turn-button" id="left" aria-label="Rotate knight left">↶</button><button class="turn-button" id="right" aria-label="Rotate knight right">↷</button></div>
-  <footer class="bottom-bar"><div class="controls-legend"><div class="legend"><span class="keycap">←</span><span class="keycap">→</span> tap to spin</div><div class="legend"><span class="keycap">␣</span> ride / pause</div></div><div class="track-name"><span class="pulse-bars"><i></i><i></i><i></i><i></i></span> Stardust Overdrive<small>ORIGINAL SOUNDTRACK · 160 BPM</small></div></footer>
+  <div class="touch-controls hidden" id="touch-controls"><button class="turn-button" id="left" aria-label="Rotate knight left"><svg viewBox="0 0 48 48"><path d="M33 38V15Q33 8 23 8H12m7-6-7 6 7 6"/></svg></button><button class="send-button" id="dispatch" aria-label="Send premove"><svg viewBox="0 0 48 48"><path d="M24 37V10m-9 9 9-9 9 9"/></svg></button><button class="turn-button" id="right" aria-label="Rotate knight right"><svg viewBox="0 0 48 48"><path d="M15 38V15Q15 8 25 8H36m-7-6 7 6-7 6"/></svg></button></div>
+  <div id="gesture-caption" class="gesture-caption hidden">TAP SIDES · SWIPE UP TO SEND</div>
+  <footer class="bottom-bar"><div class="controls-legend"><div class="legend"><span class="keycap">←</span><span class="keycap">→</span> compose</div><div class="legend"><span class="keycap">␣</span> send premove</div><div class="legend">Esc pause · ⌫ recall</div></div><div class="track-name"><span class="pulse-bars"><i></i><i></i><i></i><i></i></span> Stardust Overdrive<small>ORIGINAL SOUNDTRACK · 160 BPM</small></div></footer>
   <div class="modal-shade hidden" id="modal"></div>
 </div><div class="loading" id="loading">Tuning the rainbow…</div>`;
 const el=id=>document.getElementById(id),audio=new Soundtrack();
@@ -81,8 +84,14 @@ jumpSparkles.minSize=.16;jumpSparkles.maxSize=.55;jumpSparkles.minLifeTime=.22;j
 jumpSparkles.minEmitPower=2;jumpSparkles.maxEmitPower=5;jumpSparkles.gravity=new Vector3(0,-3,0);
 jumpSparkles.blendMode=ParticleSystem.BLENDMODE_ADD;jumpSparkles.emitRate=0;jumpSparkles.updateSpeed=.012;jumpSparkles.start();
 const burstPieces=[];for(let i=0;i<20;i++){const m=MeshBuilder.CreateSphere('landing sparkle',{diameter:.16,segments:5},scene);m.material=i%2?mint:gold;m.setEnabled(false);burstPieces.push({mesh:m,velocity:new Vector3(),life:0});}
-const circuit=createCircuit();
-let mode='start',phase='cruise',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,visualSpin=0,spinJuice=0,flash=0,airDuration=1.25,tapKick=0,lastGuideKey='',lastQueueCurrent=-1,lastLanding=null;
+const orb=new TransformNode('premove energy orb',scene);
+const orbBody=MeshBuilder.CreateSphere('energy orb shell',{diameter:3.8,segments:24},scene);orbBody.parent=orb;
+const orbMaterial=material('charged energy','#21665e',.5);orbMaterial.alpha=.22;orbMaterial.specularColor=new Color3(.18,.3,.27);orbBody.material=orbMaterial;
+const orbCore=MeshBuilder.CreateSphere('energy orb core',{diameter:.4,segments:16},scene);orbCore.parent=orb;orbCore.material=mint;
+const orbHalo=MeshBuilder.CreateTorus('energy orbit',{diameter:4.0,thickness:.035,tessellation:48},scene);orbHalo.parent=orb;orbHalo.material=mint;orbHalo.rotation.x=.65;
+const circuit=createCircuit(),premoves=new Premoves(circuit.length-1);
+let orbKick=0,sendFlash=0,orbScreen={x:0,y:0},gesture=null,orbLimits={top:180,bottom:innerHeight-90,right:innerWidth-38},progressElement=null;
+let mode='start',phase='cruise',current=0,selected=0,jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,visualSpin=0,spinJuice=0,flash=0,airDuration=1.25,tapKick=0,lastGuideKey='',lastLanding=null;
 const GROUND=PLATFORM_TOP+.06;
 let best=0;try{best=Number(localStorage.getItem('knightwave-board-best')||0);}catch{}
 el('best').textContent=String(best).padStart(5,'0');
@@ -91,10 +100,19 @@ const boardCenter=BOARD_CENTER*CELL_SIZE;
 const frame=material('chessboard frame','#46364e',.18);
 box('floating board',boardWidth+1.2,.8,boardWidth+1.2,boardCenter,-2.5,boardCenter,frame,board);
 const lightSquare=material('ivory chess square','#ddd4bc',.12),darkSquare=material('plum chess square','#655a76',.06);
+const recessedLight=material('recessed light square','#302d43',.035),recessedDark=material('recessed dark square','#191925',.025),floorRim=material('recessed square rim','#4c435b',.025);
 const cells=[];
 for(let z=BOARD_MIN;z<=BOARD_MAX;z++)for(let x=BOARD_MIN;x<=BOARD_MAX;x++){
-  const square=box('chess square',CELL_SIZE-.025,.08,CELL_SIZE-.025,x*CELL_SIZE,-2.065,z*CELL_SIZE,(x+z)%2===0?darkSquare:lightSquare,board);
+  const square=box('chess square',CELL_SIZE-.025,.08,CELL_SIZE-.025,x*CELL_SIZE,-2.065,z*CELL_SIZE,(x+z)%2===0?recessedDark:recessedLight,board);
   square.receiveShadows=true;square.metadata={x,z};cells.push(square);glow.addExcludedMesh(square);
+}
+// Shared physical rails outline all 64 recessed squares without 256 draw calls.
+for(let i=0;i<=BOARD_CELLS;i++){
+  const edge=(BOARD_MIN-.5+i)*CELL_SIZE;
+  for(const vertical of [false,true]){
+    const rail=box('raised square rim',vertical?.075:boardWidth,.16,vertical?boardWidth:.075,vertical?edge:boardCenter,-1.97,vertical?boardCenter:edge,floorRim,board);
+    rail.receiveShadows=true;glow.addExcludedMesh(rail);
+  }
 }
 const platformMaterials={occupied:material('raised chess platform','#8a779d',.10),falling:material('departed surface','#48263c',.15)};
 const platformAccent=material('platform edge','#b0e4d5',.55);
@@ -107,6 +125,7 @@ const platforms=circuit.map((stop,i)=>{
   const trims=[];
   for(const side of [-1,1])trims.push(box('platform glow rail',.07,.07,length+3.7,side*1.86,.03,length/2,mint,root));
   for(const z of [-1.85,length+1.85])trims.push(box('platform end rail',3.78,.07,.075,0,.03,z,mint,root));
+  for(let row=0;row<stop.runLength;row++)trims.push(box('raised square divider',3.78,.14,.08,0,.045,(row+.5)*CELL_SIZE,platformAccent,root));
   const surfaces=[];
   for(let row=0;row<=stop.runLength;row++){
     const offset=rotateGrid({x:0,z:row},stop.heading),light=(stop.x+offset.x+stop.z+offset.z)%2!==0;
@@ -131,6 +150,7 @@ function updatePlatforms(dt,reset=false){
 function worldCell(cell){return new Vector3(cell.x*CELL_SIZE,GROUND,cell.z*CELL_SIZE);}
 function fitBoardCamera(){
   const width=innerWidth,height=innerHeight,aspect=width/height,narrow=width<700,short=height<550&&width>height,intro=mode==='start';
+  orbLimits={top:short?114:el('move-queue').getBoundingClientRect().bottom+38,bottom:height-90,right:width-38};
   const availableWidth=intro?(narrow?.62:short?.25:.43):(short?.42:.90),availableHeight=short?.66:.58;
   let halfWidth=Math.max((boardWidth+3)/availableWidth,(boardWidth+3)/availableHeight*aspect)/2;
   const centerX=intro&&!narrow?(short?.78:.72):short?.36:.5;let centerY=intro&&narrow?.76:short?.60:narrow?.57:.61;
@@ -150,57 +170,126 @@ function fitBoardCamera(){
   }).join('');
 }
 function visible(id,on){el(id).classList.toggle('hidden',!on);}
-function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode==='playing'||mode==='paused');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');visible('move-queue',mode==='playing'||mode==='paused');}
+function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode==='playing'||mode==='paused');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');visible('move-queue',mode==='playing'||mode==='paused');visible('orb-send',mode==='playing'||mode==='paused');visible('gesture-caption',mode==='playing');orb.setEnabled(mode==='playing'||mode==='paused');}
 function start(){
-  current=0;lastLanding=null;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';visualSpin=0;
+  premoves.reset();orbKick=0;sendFlash=0;gesture=null;current=0;lastLanding=null;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';visualSpin=0;
   spinner.rotation.set(0,FORWARD_YAW,0);knight.scaling.setAll(1.38);tapKick=0;jumpSparkles.reset();jumpSparkles.start();airDuration=1.25;knight.position.copyFrom(worldCell(circuit[0]));
-  el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';lastQueueCurrent=-1;updateGuides();updatePlatforms(0,true);fitBoardCamera();
+  el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';updateGuides();updatePlatforms(0,true);fitBoardCamera();
 }
 function chosenCell(){
   const origin=circuit[current].launch,offset=rotateGrid(selected===0?{x:0,z:3}:knightDestination(selected),origin.heading);
   return {x:origin.x+offset.x,z:origin.z+offset.z};
 }
 function updateGuides(){
-  if(mode!=='playing')return;
-  el('jump-label').textContent='LANDING '+String(Math.min(landings+1,6)).padStart(2,'0')+' / 06';
-  const key=current+':'+selected;if(key===lastGuideKey)return;lastGuideKey=key;
-  const track=el('queue-track');
-  if(lastQueueCurrent===-1){
-    track.style.transition='none';track.style.transform='translateX(0)';
-    track.innerHTML=circuit.slice(1).map((stop,i)=>`<div class="move-group" data-jump="${i+1}">${moveGlyphs(stop.turns,circuit[i].heading)}</div>`).join('');
-    track.getBoundingClientRect();track.style.transition='';
-  }
-  if(lastQueueCurrent!==current){
-    [...track.children].forEach((group,i)=>{group.classList.toggle('active',i===current);group.classList.toggle('consumed',i<current);group.setAttribute('aria-hidden',String(i<current));});
-    track.style.transform=`translateX(-${track.children[current]?.offsetLeft||0}px)`;lastQueueCurrent=current;
-  }
-  el('queued-moves').innerHTML=selected?moveGlyphs(selected,circuit[current].heading):'<svg class="move-icon neutral" viewBox="0 0 64 64" aria-label="No L move queued"><path d="M32 50V15m-7 7 7-7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  if(!['playing','paused'].includes(mode))return;
+  el('jump-label').textContent=String(Math.min(landings+1,6)).padStart(2,'0')+' / 06';
+  const key=premoves.groups.map(g=>g.id).join(',')+':'+premoves.draft+':'+premoves.locked;if(key===lastGuideKey)return;lastGuideKey=key;
+  const track=el('queue-track');if(!premoves.locked)el('move-queue').querySelector('.queue-window').scrollLeft=0;
+  track.innerHTML=premoves.groups.map((group,i)=>`${i?'<i class="group-divider" aria-hidden="true"></i>':''}<div class="move-group ${i===0&&premoves.locked?'executing':''}" data-group="${group.id}" aria-label="Platform ${landings+i+1} premove">${moveGlyphs(group.turns,group.heading)}<span class="group-progress"></span></div>`).join('');
+  progressElement=track.querySelector('.executing .group-progress');
+  el('orb-glyphs').innerHTML=premoves.draft?moveGlyphs(premoves.draft,premoves.draftHeading(circuit[current].heading)):'<svg class="orb-glint" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4Q20 20 36 20Q20 20 20 36Q20 20 4 20Q20 20 20 4" fill="currentColor"/></svg>';
+  el('orb-send').classList.toggle('charged',!!premoves.draft);
+  el('orb-send').setAttribute('aria-label',premoves.draft?'Dispatch composed premove':'Compose a premove with left or right');
+  el('dispatch').disabled=!premoves.draft;el('dispatch').classList.toggle('ready',!!premoves.draft);
+  el('gesture-caption').textContent=matchMedia('(pointer:coarse)').matches?'TAP SIDES · SWIPE UP TO SEND':'← → COMPOSE · SPACE SENDS · ⌫ RECALL';
 }
 function turn(dir){
-  if(mode!=='playing'||!['cruise','air'].includes(phase))return;
-  selected+=dir;spinJuice=1;tapKick=dir*.32;
-  if(phase==='air'){visualSpin+=dir*.80;spinner.rotation.y=FORWARD_YAW+circuit[current].heading+visualSpin;}
-  else{spinner.rotation.y=FORWARD_YAW+circuit[current].heading+tapKick;spinner.rotation.z=-dir*.12;}
-  audio.spin(selected);updateGuides();
+  if(mode!=='playing'||phase==='fall'||!premoves.edit(dir))return;
+  spinJuice=1;tapKick=dir*.32;orbKick=1;orb.scaling.setAll(1.12);
+  if(phase!=='air'){spinner.rotation.y=FORWARD_YAW+circuit[current].heading+tapKick;spinner.rotation.z=-dir*.12;}
+  audio.spin(premoves.draft);updateGuides();
   const button=el(dir<0?'left':'right');button.classList.add('pressed');setTimeout(()=>button.classList.remove('pressed'),90);
+}
+function beginJump(){
+  const group=premoves.begin();if(!group)return false;
+  selected=group.turns;phase='air';jumpTime=0;airDuration=1.25+.30*(Math.abs(selected)-1);phaseTime=0;visualSpin=0;burst();updateGuides();return true;
+}
+function dispatch(){
+  if(mode!=='playing'||phase==='fall')return false;
+  const glyphs=el('orb-glyphs').innerHTML,group=premoves.dispatch(circuit[current].heading);if(!group){orbKick=.3;return false;}
+  sendFlash=1;orbKick=1;audio.dispatch();updateGuides();
+  const slot=el('queue-track').lastElementChild,rect=slot?.getBoundingClientRect(),banner=el('move-queue').getBoundingClientRect();
+  if(rect&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+    const token=document.createElement('div');token.className='dispatch-flight';token.innerHTML=glyphs;token.style.left=orbScreen.x+'px';token.style.top=orbScreen.y+'px';document.body.append(token);
+    token.animate([{transform:'translate(-50%,-50%) scale(1)',opacity:1},{transform:`translate(calc(-50% + ${Math.min(rect.x+rect.width/2,banner.right-20)-orbScreen.x}px),calc(-50% + ${rect.y+rect.height/2-orbScreen.y}px)) scale(.65)`,opacity:0}],{duration:340,easing:'cubic-bezier(.2,.7,.2,1)'}).finished.finally(()=>token.remove());
+  }
+  if(phase==='waiting')beginJump();return true;
+}
+function recall(){
+  if(mode!=='playing'||phase==='fall')return false;
+  if(!premoves.recall())return false;orbKick=1;audio.spin(premoves.draft);updateGuides();return true;
+}
+function updateOrb(dt){
+  const showing=['playing','paused'].includes(mode);orb.setEnabled(showing);if(!showing)return;
+  if(mode==='playing'){
+    orbKick=Math.max(0,orbKick-dt*5);sendFlash=Math.max(0,sendFlash-dt*3);orbHalo.rotation.y+=dt*.8;
+    const heading=spinner.rotation.y-FORWARD_YAW;
+    orb.position.set(knight.position.x+Math.sin(heading)*4.8+Math.cos(heading)*2,knight.position.y+2.5+Math.sin(runTime*3)*.12,knight.position.z+Math.cos(heading)*4.8-Math.sin(heading)*2);
+    orb.scaling.setAll(1+orbKick*.12+sendFlash*.24);orbMaterial.alpha=.36+(premoves.draft ? .16 : 0)+sendFlash*.12;orbCore.scaling.setAll(premoves.draft ? .4 : 1);
+  }
+  const matrix=scene.getTransformMatrix(),viewport=camera.viewport.toGlobal(innerWidth,innerHeight),point=Vector3.Project(orb.position,Matrix.Identity(),matrix,viewport);
+  const minY=orbLimits.top,maxY=orbLimits.bottom;
+  let x=Math.max(38,Math.min(orbLimits.right,point.x));const y=Math.max(minY,Math.min(maxY,point.y));
+  const head=knight.position.clone();head.y+=4.5;const headScreen=Vector3.Project(head,Matrix.Identity(),matrix,viewport);
+  if(Math.abs(y-headScreen.y)<38&&Math.abs(x-headScreen.x)<44)x=Math.max(38,Math.min(orbLimits.right,headScreen.x+(x>=headScreen.x?44:-44)));
+
+  {
+    orb.position.x+=(x-point.x)*(camera.orthoRight-camera.orthoLeft)/innerWidth;
+    orb.position.z-=(y-point.y)*(camera.orthoTop-camera.orthoBottom)/innerHeight/Math.sin(camera.rotation.x);
+  }
+  orbScreen={x,y};el('orb-send').style.left=x+'px';el('orb-send').style.top=y+'px';
+  if(progressElement)progressElement.style.transform=`scaleX(${Math.min(1,jumpTime/airDuration)})`;
 }
 knight.position.copyFrom(worldCell(circuit[0]));updatePlatforms(0,true);fitBoardCamera();
 function modal(content){el('modal').innerHTML=`<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">${content}</div>`;visible('modal',true);el('modal').querySelector('button')?.focus();}
 function pause(){if(mode==='playing'){setMode('paused');audio.stop();modal('<div class="eyebrow">TAKE A BREATHER</div><h2 id="dialog-title">Still in the groove.</h2><p>Your circuit will be right here.</p><button class="primary" id="resume">Keep riding <span>↗</span></button><button class="secondary" id="restart">Start a fresh run</button>');el('resume').onclick=resume;el('restart').onclick=start;}else if(mode==='paused')resume();}
 function resume(){visible('modal',false);setMode('playing');audio.start().catch(()=>{});el('world').focus();}
 function help(){const previous=mode;if(mode==='playing'){setMode('paused');audio.stop();}
-  modal('<div class="eyebrow">A KNIGHT TO REMEMBER</div><h2 id="dialog-title">Plan the whole loop.</h2><div class="how-steps"><span class="number">1</span><p>The board uses a–h and 1–8 like real chess. Ride the raised platforms; the move strip shows your upcoming jumps.</p></div><div class="how-steps"><span class="number">2</span><p>The knight moves forward continuously and jumps at each platform edge. New platforms rise ahead, and old ones fall behind. Tap ← or → to choose your next move. On your phone, tap the left or right half of the play area.</p></div><div class="how-steps"><span class="number">3</span><p>Each tap chains a rotated L: two squares forward, one across. Read each L icon: two squares along its stem, one across its arrow. Icons use the same orientation as the board. Four taps make a loop.</p></div><div class="how-steps"><span class="number">4</span><p>You can keep tapping in midair. An opposite tap undoes a turn. Your premove icons show the moves you have queued. Each group in the strip is one jump.</p></div><button class="primary" id="close-help">Got it <span>↗</span></button>');el('close-help').onclick=()=>{visible('modal',false);if(previous==='playing')resume();};}
+  modal('<div class="eyebrow">A KNIGHT TO REMEMBER</div><h2 id="dialog-title">Charge. Send. Jump.</h2><div class="how-steps"><span class="number">1</span><p>Bright platforms are raised and safe to land on. Dark squares sit below. Plan on the a–h, 1–8 chessboard.</p></div><div class="how-steps"><span class="number">2</span><p>Tap the left or right side, or use ← / →, to compose L moves in the energy orb ahead of your knight. Two squares along the icon’s stem, one across its arrow. An opposite tap undoes a turn.</p></div><div class="how-steps"><span class="number">3</span><p>Swipe up or press Space to send one group for one platform. The orb clears for the next group. Your banner shows only moves you have sent; each divider separates platforms. You can also tap the orb or the upward arrow to send.</p></div><div class="how-steps"><span class="number">4</span><p>The knight jumps at the edge using the next sent group. If none is ready, it waits for you. During a jump, compose later groups in the orb. Swipe down or press Backspace to clear a draft, then recall the last unstarted group. Escape pauses.</p></div><button class="primary" id="close-help">Got it <span>↗</span></button>');el('close-help').onclick=()=>{visible('modal',false);if(previous==='playing')resume();};}
 function finish(won=false){
   setMode(won?'won':'over');jumpSparkles.emitRate=0;
   if(score>best){best=score;try{localStorage.setItem('knightwave-board-best',String(best));}catch{}el('best').textContent=String(best).padStart(5,'0');}
-  modal(`<div class="eyebrow">${won?'A PERFECT LITTLE LOOP':'THE BOARD WILL WAIT'}</div><h2 id="dialog-title">${won?'Circuit complete.':'One more circuit?'}</h2><p>${won?'Six landings, all the way home. You found your flow.':'Read the queued L icons and correct your premove before touchdown.'}</p><div class="dialog-stats"><div><strong>${score}</strong><small>YOUR SCORE</small></div><div><strong>${landings} / 6</strong><small>LANDINGS</small></div></div><button class="primary" id="again">Ride again <span>↗</span></button>`);el('again').onclick=start;
+  modal(`<div class="eyebrow">${won?'A PERFECT LITTLE LOOP':'THE BOARD WILL WAIT'}</div><h2 id="dialog-title">${won?'Circuit complete.':'One more circuit?'}</h2><p>${won?'Six landings, all the way home. You found your flow.':'Recall an unstarted group to edit it, then send it again. Read the bright platforms to plan your next landing.'}</p><div class="dialog-stats"><div><strong>${score}</strong><small>YOUR SCORE</small></div><div><strong>${landings} / 6</strong><small>LANDINGS</small></div></div><button class="primary" id="again">Ride again <span>↗</span></button>`);el('again').onclick=start;
 }
-el('start').onclick=start;el('help').onclick=help;el('pause').onclick=pause;
 function mute(){el('sound').textContent=audio.mute()?'♪̸':'♫';el('sound').setAttribute('aria-label',audio.muted?'Unmute soundtrack':'Mute soundtrack');el('sound').setAttribute('aria-pressed',String(audio.muted));}
-el('sound').onclick=mute;
-for(const [id,d] of [['left',-1],['right',1]])el(id).addEventListener('pointerdown',e=>{e.preventDefault();turn(d);});
-canvas.addEventListener('pointerdown',e=>{if(mode==='playing'){e.preventDefault();turn(e.clientX<window.innerWidth/2?-1:1);}});
-window.addEventListener('keydown',e=>{if(e.target instanceof HTMLButtonElement&&e.code==='Space')return;if(['ArrowLeft','ArrowRight','Space','Escape','KeyA','KeyD'].includes(e.code))e.preventDefault();if(e.repeat)return;if(e.code==='ArrowLeft'||e.code==='KeyA')turn(-1);if(e.code==='ArrowRight'||e.code==='KeyD')turn(1);if(e.code==='KeyM')mute();if(e.code==='Escape'){if(mode==='playing'||mode==='paused'){if(!el('close-help'))pause();else el('close-help').click();}}if(e.code==='Space'){if(mode==='start'||mode==='over'||mode==='won')start();else pause();}});
+el('start').onclick=start;el('sound').onclick=mute;el('pause').onclick=pause;el('help').onclick=help;
+el('dispatch').onclick=dispatch;el('orb-send').onclick=dispatch;
+for(const [id,direction] of [['left',-1],['right',1]])el(id).addEventListener('pointerdown',event=>{event.preventDefault();turn(direction);});
+function beginGesture(event,orbTap=false){
+  if(mode!=='playing'||gesture)return;event.preventDefault();canvas.setPointerCapture(event.pointerId);
+  const direction=orbTap?0:event.clientX<innerWidth*.42?-1:event.clientX>innerWidth*.58?1:0;
+  gesture={id:event.pointerId,start:{x:event.clientX,y:event.clientY},draft:premoves.draft,provisional:false,cancelled:false,orbTap};
+  if(direction){turn(direction);gesture.provisional=true;}else{orbKick=.5;}
+}
+canvas.addEventListener('pointerdown',event=>beginGesture(event));
+el('orb-send').addEventListener('pointerdown',event=>beginGesture(event,true));
+canvas.addEventListener('pointermove',event=>{
+  if(!gesture||gesture.id!==event.pointerId)return;
+  if(Math.hypot(event.clientX-gesture.start.x,event.clientY-gesture.start.y)>12&&!gesture.cancelled){
+    if(gesture.provisional){premoves.draft=gesture.draft;updateGuides();}gesture.cancelled=true;
+  }
+});
+canvas.addEventListener('pointerup',event=>{
+  if(!gesture||gesture.id!==event.pointerId)return;
+  const pending=gesture;gesture=null;
+  const action=verticalGesture(pending.start,{x:event.clientX,y:event.clientY});
+  if(action){if(pending.provisional&&!pending.cancelled){premoves.draft=pending.draft;updateGuides();}action==='dispatch'?dispatch():recall();}
+  else if(pending.orbTap&&!pending.cancelled)dispatch();
+});
+canvas.addEventListener('pointercancel',event=>{
+  if(!gesture||gesture.id!==event.pointerId)return;
+  if(gesture.provisional&&!gesture.cancelled){premoves.draft=gesture.draft;updateGuides();}gesture=null;
+});
+window.addEventListener('keydown',event=>{
+  if(event.key===' '&&event.target instanceof HTMLButtonElement&&!el('modal').classList.contains('hidden'))return;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Escape','Backspace'].includes(event.key))event.preventDefault();
+  if(event.repeat)return;
+  if(event.key==='ArrowLeft'||event.key==='a'||event.key==='A')turn(-1);
+  if(event.key==='ArrowRight'||event.key==='d'||event.key==='D')turn(1);
+  if(event.key===' '||event.key==='ArrowUp'){if(['start','over','won'].includes(mode))start();else if(mode==='paused')resume();else dispatch();}
+  if(event.key==='Backspace'||event.key==='ArrowDown')recall();
+  if(event.key==='Escape'){if(el('close-help')&&!el('modal').classList.contains('hidden'))el('close-help').click();else pause();}if(event.key==='m'||event.key==='M')mute();
+});
 // Trap modal focus so keyboard play and pause stay predictable.
 el('modal').addEventListener('keydown',e=>{if(e.key==='Tab'){const buttons=[...el('modal').querySelectorAll('button')];if(buttons.length===1){e.preventDefault();buttons[0].focus();}else if(e.shiftKey&&document.activeElement===buttons[0]){e.preventDefault();buttons.at(-1).focus();}else if(!e.shiftKey&&document.activeElement===buttons.at(-1)){e.preventDefault();buttons[0].focus();}}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='playing')pause();});
@@ -217,7 +306,9 @@ function update(dt){
       knight.position.set(origin.x*CELL_SIZE+offset.x,GROUND+Math.sin(distance*2.6)*.025,origin.z*CELL_SIZE+offset.z);
       spinner.rotation.y=FORWARD_YAW+origin.heading+tapKick;spinner.rotation.z=-tapKick*.25;spinner.rotation.x=-.06+Math.sin(distance*2.6)*.035;
 
-      if(distance>=origin.runLength*CELL_SIZE){phase='air';jumpTime=0;airDuration=1.25+.30*(Math.abs(circuit[current+1].turns)-1);phaseTime=0;visualSpin=0;burst();}
+      if(distance>=origin.runLength*CELL_SIZE&&!beginJump()){phase='waiting';phaseTime=0;}
+    }else if(phase==='waiting'){
+      knight.position.set(origin.launch.x*CELL_SIZE,GROUND+Math.sin(phaseTime*3)*.025,origin.launch.z*CELL_SIZE);spinner.rotation.y=FORWARD_YAW+origin.heading+tapKick;spinner.rotation.x=0;spinner.rotation.z=-tapKick*.25;
     }else if(phase==='air'){
       jumpTime+=dt;const t=Math.min(1,jumpTime/airDuration),p=rotateGrid(flightPoint(selected,t),origin.heading);
       knight.position.x=(origin.launch.x+p.x)*CELL_SIZE;knight.position.z=(origin.launch.z+p.z)*CELL_SIZE;
@@ -227,7 +318,7 @@ function update(dt){
       if(t===1){
         knight.position.copyFrom(worldCell(chosenCell()));
         if(isLandingMatch(selected,circuit[current+1].turns)){
-          lastLanding={x:knight.position.x,y:knight.position.y,z:knight.position.z};current++;landings++;combo++;score+=100+combo*25+Math.abs(selected)*10;el('score').textContent=String(score).padStart(5,'0');
+          lastLanding={x:knight.position.x,y:knight.position.y,z:knight.position.z};premoves.complete();current++;landings++;combo++;score+=100+combo*25+Math.abs(selected)*10;el('score').textContent=String(score).padStart(5,'0');
           burst();flash=1;audio.land(combo);selected=0;visualSpin=0;spinner.rotation.set(0,FORWARD_YAW+circuit[current].heading,0);updatePlatforms(0);
           if(current===circuit.length-1){finish(true);}
           else{phase='cruise';phaseTime=0;lastGuideKey='';updateGuides();}
@@ -237,11 +328,8 @@ function update(dt){
   }
   if(mode==='playing'||mode==='start'||mode==='won'){
     updatePlatforms(dt);
-    const t=phase==='air'?Math.min(1,jumpTime/airDuration):0;
     const squash=phase==='cruise'?Math.max(0,1-phaseTime/.18)*.12:0;
     knight.scaling.set(1.38*(1+squash/2),1.38*(1-squash),1.38*(1+squash/2));
-    el('flight-dot').setAttribute('cx',String(10+80*t));el('flight-dot').setAttribute('cy',String(30-88*t*(1-t)));
-    el('flight-indicator').classList.toggle('in-air',phase==='air');
     glow.intensity=.43+audio.pulse*.10;
     const abovePlatform=platforms.some((p,i)=>{
       if(!p.root.isEnabled()||p.stage==='falling'||p.root.position.y<PLATFORM_TOP-.1)return false;
@@ -256,14 +344,14 @@ function update(dt){
     flash=Math.max(0,flash-dt*3.5);el('flash').style.opacity=flash*.35;
   }
 }
-engine.runRenderLoop(()=>{update(Math.min(engine.getDeltaTime()/1000,.05));scene.render();});
+engine.runRenderLoop(()=>{const dt=Math.min(engine.getDeltaTime()/1000,.05);update(dt);scene.updateTransformMatrix();updateOrb(mode==='playing'?dt:0);scene.render();});
 scene.executeWhenReady(()=>{visible('loading',false);});
 document.fonts.ready.then(fitBoardCamera);
-const state=()=>({mode,phase,selected,target:circuit[current+1]?.turns,jump:landings+1,score,combo,landings,totalLandings:circuit.length-1,lastLanding,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},planning:Math.min(1,phaseTime*CRUISE_SPEED/(circuit[current].runLength*CELL_SIZE)),airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{min:BOARD_MIN,max:BOARD_MAX,cells:cells.length,extent:boardWidth/2},heading:circuit[current]?.heading,landingHeading:circuit[current+1]?.heading,launch:{x:circuit[current].launch.x*CELL_SIZE,z:circuit[current].launch.z*CELL_SIZE},landing:circuit[current+1]?{x:circuit[current+1].x*CELL_SIZE,z:circuit[current+1].z*CELL_SIZE}:null,render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},platforms:platforms.map((p,i)=>({index:i,stage:p.stage,height:p.root.position.y,visible:p.root.isEnabled()})),speed:CRUISE_SPEED,moveQueue:circuit.slice(current+1).map((stop,i)=>({turns:stop.turns,heading:circuit[current+i].heading})),camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,sparkles:jumpSparkles.getActiveCount()});
+const state=()=>({mode,phase,selected,draft:premoves.draft,draftHeading:premoves.draftHeading(circuit[current].heading),locked:premoves.locked,orb:{x:orbScreen.x,y:orbScreen.y},target:circuit[current+1]?.turns,jump:landings+1,score,combo,landings,totalLandings:circuit.length-1,lastLanding,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},planning:phase==='waiting'?1:Math.min(1,phaseTime*CRUISE_SPEED/(circuit[current].runLength*CELL_SIZE)),airtime:jumpTime/airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,steps:audio.step},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{min:BOARD_MIN,max:BOARD_MAX,cells:cells.length,extent:boardWidth/2},heading:circuit[current]?.heading,landingHeading:circuit[current+1]?.heading,launch:{x:circuit[current].launch.x*CELL_SIZE,z:circuit[current].launch.z*CELL_SIZE},landing:circuit[current+1]?{x:circuit[current+1].x*CELL_SIZE,z:circuit[current+1].z*CELL_SIZE}:null,render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},platforms:platforms.map((p,i)=>({index:i,stage:p.stage,height:p.root.position.y,visible:p.root.isEnabled()})),speed:CRUISE_SPEED,moveQueue:premoves.groups.map(g=>({...g})),camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,sparkles:jumpSparkles.getActiveCount()});
 // Observability for playtesting; actions are the same as keyboard and touch.
-window.knightwave={state,start,turn,pause,resume,mute,engine,scene};
+window.knightwave={state,start,turn,dispatch,recall,pause,resume,mute,engine,scene};
 if(document.modelContext?.registerTool){
   const lifecycle=new AbortController();
-  for(const tool of [{name:'get_knightwave_state',description:'Read current score, jump phase, selected turns and next landing.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:state},{name:'rotate_knight',description:'Add one left or right quarter-turn to the current jump. Uses the same action as the on-screen controls.',inputSchema:{type:'object',properties:{direction:{enum:['left','right']}},required:['direction'],additionalProperties:false},execute:input=>{if(!input||!['left','right'].includes(input.direction))throw new Error('Direction must be left or right');if(mode!=='playing')throw new Error('Start a run before rotating');turn(input.direction==='right'?1:-1);return state();}}]){try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}}
+  for(const tool of [{name:'get_knightwave_state',description:'Read current score, jump phase, selected turns and next landing.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:state},{name:'rotate_knight',description:'Add one left or right quarter-turn to the premove orb. Uses the same action as the on-screen controls.',inputSchema:{type:'object',properties:{direction:{enum:['left','right']}},required:['direction'],additionalProperties:false},execute:input=>{if(!input||!['left','right'].includes(input.direction))throw new Error('Direction must be left or right');if(mode!=='playing')throw new Error('Start a run before rotating');turn(input.direction==='right'?1:-1);return state();}}]){try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }

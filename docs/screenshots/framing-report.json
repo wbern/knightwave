@@ -1,25 +1,25 @@
 [
   {
     "viewport": "desktop",
-    "frames": 835,
+    "frames": 845,
     "clipped": [],
     "errors": []
   },
   {
     "viewport": "phone",
-    "frames": 835,
+    "frames": 843,
     "clipped": [],
     "errors": []
   },
   {
     "viewport": "compact",
-    "frames": 831,
+    "frames": 844,
     "clipped": [],
     "errors": []
   },
   {
     "viewport": "landscape",
-    "frames": 828,
+    "frames": 821,
     "clipped": [],
     "errors": []
   }

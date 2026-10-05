@@ -32,6 +32,7 @@ export class Soundtrack {
     if(bar%4===3&&p>=12)this.hit(t,.03,.04,6000);
   }
   spin(step){if(!this.ctx||!this.playing)return;this.tone(72+Math.abs(step)%4*4,this.ctx.currentTime,.16,.10,'triangle',0,true);}
+  dispatch(){if(!this.ctx||!this.playing)return;[76,83,88].forEach((n,i)=>this.tone(n,this.ctx.currentTime+i*.035,.16,.06,'triangle',0,true));}
   land(combo){if(!this.ctx||!this.playing)return;[72,76,79,84].forEach((n,i)=>this.tone(n+Math.min(combo,6),this.ctx.currentTime+i*.045,.25,.07,'triangle',0,true));}
   fall(){if(!this.ctx||!this.playing)return;[65,60,53].forEach((n,i)=>this.tone(n,this.ctx.currentTime+i*.09,.28,.12,'sawtooth'));}
   get pulse(){return this.ctx&&this.playing?Math.pow(1-(this.ctx.currentTime%(this.beat))/this.beat,3):0;}

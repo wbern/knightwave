@@ -1,5 +1,6 @@
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
+import {swipe} from './gestures.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 
 const url=process.env.KNIGHTWAVE_URL||'http://127.0.0.1:5179/';
@@ -8,7 +9,7 @@ await mkdir(output,{recursive:true});
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const report=[];
 try {
-  for(const layout of [{name:'desktop',width:1280,height:800,phone:false},{name:'phone',width:390,height:844,phone:true},{name:'compact',width:375,height:667,phone:true},{name:'landscape',width:844,height:390,phone:true}]){
+  for(const layout of [{name:'desktop',width:1280,height:800,phone:false},{name:'phone',width:390,height:844,phone:true},{name:'compact',width:375,height:667,phone:true},{name:'landscape',width:844,height:390,phone:true}].filter(layout=>!process.env.KNIGHTWAVE_LAYOUTS||process.env.KNIGHTWAVE_LAYOUTS.split(',').includes(layout.name))){
     const {name,phone}=layout;const size={width:layout.width,height:layout.height};
     const context=await browser.newContext({viewport:size,deviceScaleFactor:phone?2:1,isMobile:phone,hasTouch:phone,recordVideo:{dir:output,size}});
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -35,9 +36,10 @@ try {
           const queue=document.getElementById('move-queue').getBoundingClientRect();
           const overlapsQueue=boardBounds.left*innerWidth<queue.right&&boardBounds.right*innerWidth>queue.left&&boardBounds.top*innerHeight<queue.bottom&&boardBounds.bottom*innerHeight>queue.top;
           const knightOverlapsQueue=bounds.left*innerWidth<queue.right&&bounds.right*innerWidth>queue.left&&bounds.top*innerHeight<queue.bottom&&bounds.bottom*innerHeight>queue.top;
-          const result={knightOverlapsQueue,overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
+          const orb=document.getElementById('orb-send').getBoundingClientRect(),orbOverlapsQueue=orb.left<queue.right&&orb.right>queue.left&&orb.top<queue.bottom&&orb.bottom>queue.top,orbClipped=orb.left<0||orb.right>innerWidth||orb.top<80||orb.bottom>innerHeight-60;
+          const result={orbOverlapsQueue,orbClipped,knightOverlapsQueue,overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
           window.visualAudit.samples.push(result);
-          if(result.knightOverlapsQueue||result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
+          if(result.orbOverlapsQueue||result.orbClipped||result.knightOverlapsQueue||result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
         }
         requestAnimationFrame(sample);
       }
@@ -49,13 +51,17 @@ try {
       await page.evaluate(()=>window.knightwave.resume());
     };
     await page.waitForTimeout(200);await capture('board');
+    await page.waitForFunction(()=>window.knightwave.state().phase==='waiting');await capture('waiting');
     for(let jump=1;jump<=6;jump++){
-      await page.waitForFunction(n=>window.knightwave.state().jump===n&&window.knightwave.state().phase==='air',jump);
+      await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&['cruise','waiting'].includes(s.phase);},jump);
       const target=await page.evaluate(()=>window.knightwave.state().target);
       for(let turn=0;turn<Math.abs(target);turn++){
         if(phone)await page.getByRole('button',{name:target>0?'Rotate knight right':'Rotate knight left'}).tap();
         else await page.keyboard.press(target>0?'ArrowRight':'ArrowLeft');
       }
+      await capture(`jump-${jump}-charged`);
+      if(phone)await swipe(page);else await page.keyboard.press(' ');
+      await page.waitForFunction(()=>window.knightwave.state().phase==='air');
       if([1,2,3,4,5,6].includes(jump))for(const [label,time] of [['launch',.18],['middle',.52],['landing',.88]]){
         await page.waitForFunction(t=>window.knightwave.state().phase==='air'&&window.knightwave.state().airtime>=t,time);
         await capture(`jump-${jump}-${label}`);
