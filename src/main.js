@@ -1,7 +1,7 @@
 import './style.css';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Vector3, Matrix } from '@babylonjs/core/Maths/math.vector';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -9,6 +9,8 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
@@ -18,16 +20,17 @@ import { knightDestination, isLandingMatch, flightPoint, flightHeading, rotateGr
 import { BOARD_MIN, BOARD_MAX, BOARD_CELLS, BOARD_CENTER, CELL_SIZE, createCircuit } from './board.js';
 import { PLATFORM_TOP, CRUISE_SPEED, platformStage, platformPose } from './platforms.js';
 import { moveGlyphs } from './moves.js';
+import { createKnight } from './knight.js';
 import { Soundtrack } from './audio.js';
 
 const asset=name=>`${import.meta.env.BASE_URL}${name}`;
 const app=document.querySelector('#app');
-app.innerHTML=`<canvas id="world" aria-label="Knightwave overhead chess circuit"></canvas>
+app.innerHTML=`<canvas id="world" aria-label="Knightwave 3D chess circuit"></canvas>
 <div id="ui" class="start-mode">
   <header class="topbar"><div class="brand"><img class="brand-icon" src="${asset('knight-mark.svg')}" alt="" width="35" height="35"><div class="brand-name">knightwave<small>AN ARCADE DAYDREAM</small></div></div><div class="stats"><div class="stat"><small>SCORE</small><strong id="score">00000</strong></div><div class="stat"><small>BEST</small><strong id="best">00000</strong></div></div><div class="utility"><button class="icon-button" id="sound" aria-label="Mute soundtrack" title="Sound on/off (M)">♫</button><button class="icon-button hidden" id="pause" aria-label="Pause game" title="Pause (Esc)">Ⅱ</button><button class="icon-button" id="help" aria-label="How to play" title="How to play">?</button></div></header>
   <section class="center-card" id="start-screen"><div class="eyebrow">CHESS MOVES. COSMIC GROOVES.</div><h1>Ride the<span>knightwave.</span></h1><p class="intro">A little chess. A little foresight.<br>Read the moves. Find the rhythm.<br>Bring your knight back home.</p><button class="primary" id="start">Let’s ride <span>↗</span></button><div class="start-caption">SOUND ON. SHOULDERS DOWN. CHASE THE GLOW.</div></section>
   <div class="run-label hidden" id="run-label">THE CIRCUIT <span> / </span> <span id="jump-label">JUMP 01</span></div>
-  <section id="move-queue" class="move-queue hidden" aria-label="Upcoming knight moves"><div class="queue-heading"><span class="queue-now">NOW</span><span>UP NEXT</span></div><div class="queue-window"><div id="queue-track" class="queue-track"></div></div><div class="premove"><span>YOUR PREMOVE</span><div id="queued-moves" class="queued-moves"></div></div></section>
+  <section id="move-queue" class="move-queue hidden" aria-label="Upcoming knight moves"><div class="queue-heading"><span class="queue-now">NOW</span><span>UP NEXT</span></div><div class="queue-window"><div id="queue-track" class="queue-track"></div></div><div class="premove"><span>YOUR PREMOVE</span><div id="queued-moves" class="queued-moves"></div><svg id="flight-indicator" class="flight-indicator" viewBox="0 0 100 40" role="img" aria-label="Jump progress"><path class="flight-ground" d="M8 33H92"/><path class="flight-arc" d="M10 30Q50 -14 90 30"/><circle id="flight-dot" cx="10" cy="30" r="4"/></svg></div></section>
   <div id="board-labels" class="board-labels" aria-hidden="true"></div>
   <div class="flash" id="flash"></div>
   <div class="touch-controls" id="touch-controls"><button class="turn-button" id="left" aria-label="Rotate knight left">↶</button><button class="turn-button" id="right" aria-label="Rotate knight right">↷</button></div>
@@ -41,14 +44,16 @@ try{engine=new Engine(canvas,true,{preserveDrawingBuffer:false,stencil:true,powe
 engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio||1,2));
 scene.imageProcessingConfiguration.toneMappingEnabled=true;scene.imageProcessingConfiguration.exposure=.85;
 scene.clearColor=new Color4(.028,.014,.07,1);scene.fogMode=Scene.FOGMODE_EXP2;scene.fogColor=new Color3(.08,.025,.16);scene.fogDensity=0;
-const camera=new FreeCamera('fixed overhead board',new Vector3(BOARD_CENTER*CELL_SIZE,64,BOARD_CENTER*CELL_SIZE-.0001),scene);camera.minZ=.1;camera.maxZ=1200;camera.mode=Camera.ORTHOGRAPHIC_CAMERA;camera.setTarget(new Vector3(BOARD_CENTER*CELL_SIZE,0,BOARD_CENTER*CELL_SIZE));
-const hemi=new HemisphericLight('soft light',new Vector3(-.4,1,-.4),scene);hemi.intensity=.65;hemi.diffuse=new Color3(.76,.83,1);hemi.groundColor=new Color3(.25,.08,.43);
+const camera=new FreeCamera('fixed front chessboard',new Vector3(BOARD_CENTER*CELL_SIZE,48,BOARD_CENTER*CELL_SIZE-50),scene);camera.minZ=.1;camera.maxZ=1200;camera.mode=Camera.ORTHOGRAPHIC_CAMERA;camera.setTarget(new Vector3(BOARD_CENTER*CELL_SIZE,0,BOARD_CENTER*CELL_SIZE));
+const hemi=new HemisphericLight('soft light',new Vector3(-.4,1,-.4),scene);hemi.intensity=.55;hemi.diffuse=new Color3(.76,.83,1);hemi.groundColor=new Color3(.25,.08,.43);
 const rim=new PointLight('mint rim',new Vector3(0,8,-4),scene);rim.diffuse=new Color3(.3,1,.83);rim.intensity=.45;rim.range=38;
+const sun=new DirectionalLight('soft key light',new Vector3(.35,-1,.3),scene);sun.position.set(-18,40,-18);sun.intensity=.85;sun.diffuse=Color3.FromHexString('#fff2db');
+const shadows=new ShadowGenerator(2048,sun);shadows.usePercentageCloserFiltering=true;shadows.filteringQuality=ShadowGenerator.QUALITY_MEDIUM;shadows.bias=.001;shadows.normalBias=.035;shadows.setDarkness(.3);
 const glow=new GlowLayer('neon',scene,{mainTextureRatio:.4,blurKernelSize:32});glow.intensity=.65;
 function material(name,hex,emission=0){const m=new StandardMaterial(name,scene);m.diffuseColor=Color3.FromHexString(hex);m.emissiveColor=m.diffuseColor.scale(emission);m.specularColor=new Color3(.06,.06,.09);return m;}
 const palette=['#ff72c1','#bf7bff','#8c83ff','#70bdff','#75efee','#a8f9c2','#f8e99c'];
 const roadMats=palette.map((c,i)=>material('rainbow '+i,c,.25));
-const mint=material('mint neon','#8dffe1',1.6),pink=material('pink neon','#fd8bdf',1.5),gold=material('landing gold','#ffb642',.65),white=material('porcelain','#e9fff5',.22),purple=material('mane','#583680',.3);
+const mint=material('mint neon','#8dffe1',1.6),pink=material('pink neon','#fd8bdf',1.5),gold=material('landing gold','#ffb642',.65),white=material('porcelain','#efece5',.06),purple=material('mane','#583680',.3);
 
 // Dedicated sky artwork stays behind the 3D course and planets.
 const sky=MeshBuilder.CreateSphere('world sky',{diameter:1800,segments:32,sideOrientation:Mesh.BACKSIDE},scene);
@@ -62,14 +67,10 @@ const halo=MeshBuilder.CreateTorus('moon halo',{diameter:28,thickness:.28,tessel
 const scenery=new TransformNode('cosmos',scene);planet.parent=planetRing.parent=moon.parent=halo.parent=scenery;
 function box(name,w,h,d,x,y,z,mat,parent){const m=MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);m.position.set(x,y,z);m.material=mat;if(parent)m.parent=parent;return m;}
 
-// The upright vector piece remains recognizable in the overhead chess view.
-const knight=new TransformNode('knight',scene),spinner=new TransformNode('spin',scene);spinner.parent=knight;
-const FORWARD_YAW=Math.PI/2;spinner.rotation.y=FORWARD_YAW;
-const pieceRoot=new TransformNode('readable knight',scene);pieceRoot.parent=knight;
-const piece=MeshBuilder.CreatePlane('chess knight artwork',{width:3.2,height:3.6},scene);piece.parent=pieceRoot;piece.rotation.x=Math.PI/2;piece.position.y=.2;
-const pieceMaterial=new StandardMaterial('porcelain knight artwork',scene),pieceTexture=new Texture(asset('knight-piece.svg'),scene);pieceTexture.hasAlpha=true;
-pieceMaterial.diffuseTexture=pieceTexture;pieceMaterial.emissiveTexture=pieceTexture;pieceMaterial.diffuseColor=Color3.Black();pieceMaterial.emissiveColor=Color3.White();pieceMaterial.disableLighting=true;pieceMaterial.useAlphaFromDiffuseTexture=true;pieceMaterial.backFaceCulling=false;piece.material=pieceMaterial;glow.addExcludedMesh(piece);
-const shadow=MeshBuilder.CreateDisc('hover shadow',{radius:1.1,tessellation:30},scene);shadow.rotation.x=Math.PI/2;shadow.material=material('shadow','#170d37',.1);shadow.material.alpha=.38;shadow.position.y=.035;
+const {knight,spinner}=createKnight(scene,white,purple,mint);
+const FORWARD_YAW=Math.PI/2;
+for(const mesh of knight.getChildMeshes()){shadows.addShadowCaster(mesh);glow.addExcludedMesh(mesh);}
+const shadow=MeshBuilder.CreateDisc('hover shadow',{radius:1.1,tessellation:30},scene);shadow.rotation.x=Math.PI/2;shadow.material=material('shadow','#170d37',.1);shadow.material.alpha=.4;shadow.material.disableLighting=true;shadow.material.diffuseColor=Color3.Black();shadow.material.emissiveColor=Color3.FromHexString('#1a1525');shadow.position.y=.035;glow.addExcludedMesh(shadow);
 const jumpSparkles=new ParticleSystem('jump star glints',500,scene);
 jumpSparkles.particleTexture=new Texture(asset('sparkle.svg'),scene);
 jumpSparkles.emitter=knight.position;
@@ -88,20 +89,21 @@ el('best').textContent=String(best).padStart(5,'0');
 const board=new TransformNode('finite chessboard',scene),boardWidth=BOARD_CELLS*CELL_SIZE;
 const boardCenter=BOARD_CENTER*CELL_SIZE;
 const frame=material('chessboard frame','#46364e',.18);
-box('floating board',boardWidth+1.2,.35,boardWidth+1.2,boardCenter,-2.28,boardCenter,frame,board);
+box('floating board',boardWidth+1.2,.8,boardWidth+1.2,boardCenter,-2.5,boardCenter,frame,board);
 const lightSquare=material('ivory chess square','#ddd4bc',.12),darkSquare=material('plum chess square','#655a76',.06);
 const cells=[];
 for(let z=BOARD_MIN;z<=BOARD_MAX;z++)for(let x=BOARD_MIN;x<=BOARD_MAX;x++){
   const square=box('chess square',CELL_SIZE-.025,.08,CELL_SIZE-.025,x*CELL_SIZE,-2.065,z*CELL_SIZE,(x+z)%2===0?darkSquare:lightSquare,board);
-  square.metadata={x,z};cells.push(square);glow.addExcludedMesh(square);
+  square.receiveShadows=true;square.metadata={x,z};cells.push(square);glow.addExcludedMesh(square);
 }
-const platformMaterials={occupied:material('raised chess platform','#4b5768',.12),falling:material('departed surface','#48263c',.15)};
-const platformAccent=material('platform edge','#89abb6',.35);
+const platformMaterials={occupied:material('raised chess platform','#8a779d',.10),falling:material('departed surface','#48263c',.15)};
+const platformAccent=material('platform edge','#b0e4d5',.55);
 const fallingAccent=material('departed platform rails','#ae6288',.25);
 const platforms=circuit.map((stop,i)=>{
   const root=new TransformNode('platform '+i,scene);root.position.set(stop.x*CELL_SIZE,PLATFORM_TOP,stop.z*CELL_SIZE);root.rotation.y=stop.heading;root.parent=board;
   const length=stop.runLength*CELL_SIZE;
-  const deck=box('raised platform deck',3.7,.68,length+3.7,0,-.34,length/2,platformMaterials.occupied,root);
+  const deck=box('raised platform deck',3.7,1.05,length+3.7,0,-.525,length/2,platformMaterials.occupied,root);
+  box('platform lift column',2.15,1.65,length+2.1,0,-1.86,length/2,platformMaterials.occupied,root);
   const trims=[];
   for(const side of [-1,1])trims.push(box('platform glow rail',.07,.07,length+3.7,side*1.86,.03,length/2,mint,root));
   for(const z of [-1.85,length+1.85])trims.push(box('platform end rail',3.78,.07,.075,0,.03,z,mint,root));
@@ -109,8 +111,9 @@ const platforms=circuit.map((stop,i)=>{
   for(let row=0;row<=stop.runLength;row++){
     const offset=rotateGrid({x:0,z:row},stop.heading),light=(stop.x+offset.x+stop.z+offset.z)%2!==0;
     const square=box('raised chess square',3.58,.025,3.58,0,.01,row*CELL_SIZE,light?lightSquare:darkSquare,root);
-    surfaces.push(square);glow.addExcludedMesh(square);
+    square.receiveShadows=true;surfaces.push(square);glow.addExcludedMesh(square);
   }
+  for(const mesh of root.getChildMeshes())shadows.addShadowCaster(mesh);
   return {root,deck,trims,surfaces,stage:null,age:0};
 });
 function updatePlatforms(dt,reset=false){
@@ -139,9 +142,10 @@ function fitBoardCamera(){
   const halfHeight=halfWidth/aspect;
   const offsetX=(.5-centerX)*2*halfWidth,offsetY=(centerY-.5)*2*halfHeight;
   camera.orthoLeft=-halfWidth+offsetX;camera.orthoRight=halfWidth+offsetX;camera.orthoTop=halfHeight+offsetY;camera.orthoBottom=-halfHeight+offsetY;
-  const screen=(x,z)=>({x:(x-boardCenter-camera.orthoLeft)/(2*halfWidth)*width,y:(camera.orthoTop-(z-boardCenter))/(2*halfHeight)*height});
+  camera.getViewMatrix(true);
+  const screen=(x,z)=>Vector3.Project(new Vector3(x,-2,z),Matrix.Identity(),camera.getViewMatrix().multiply(camera.getProjectionMatrix(true)),camera.viewport.toGlobal(width,height));
   el('board-labels').innerHTML=Array.from({length:8},(_,i)=>{
-    const file=screen((BOARD_MIN+i)*CELL_SIZE,BOARD_MIN*CELL_SIZE-CELL_SIZE/2-1.0),rank=screen(BOARD_MIN*CELL_SIZE-CELL_SIZE/2-1.1,(BOARD_MIN+i)*CELL_SIZE);
+    const file=screen((BOARD_MIN+i)*CELL_SIZE,BOARD_MIN*CELL_SIZE-CELL_SIZE/2-2.0),rank=screen(BOARD_MIN*CELL_SIZE-CELL_SIZE/2-1.1,(BOARD_MIN+i)*CELL_SIZE);
     return `<span style="left:${file.x}px;top:${file.y}px">${String.fromCharCode(97+i)}</span><span style="left:${rank.x}px;top:${rank.y}px">${i+1}</span>`;
   }).join('');
 }
@@ -149,7 +153,7 @@ function visible(id,on){el(id).classList.toggle('hidden',!on);}
 function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',mode==='playing'||mode==='paused');visible('run-label',mode!=='start');visible('touch-controls',mode==='playing');visible('move-queue',mode==='playing'||mode==='paused');}
 function start(){
   current=0;lastLanding=null;selected=0;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='cruise';visualSpin=0;
-  spinner.rotation.set(0,FORWARD_YAW,0);pieceRoot.rotation.y=0;pieceRoot.scaling.setAll(1);tapKick=0;jumpSparkles.reset();jumpSparkles.start();airDuration=1.25;knight.position.copyFrom(worldCell(circuit[0]));
+  spinner.rotation.set(0,FORWARD_YAW,0);knight.scaling.setAll(1.38);tapKick=0;jumpSparkles.reset();jumpSparkles.start();airDuration=1.25;knight.position.copyFrom(worldCell(circuit[0]));
   el('score').textContent='00000';visible('modal',false);setMode('playing');audio.start().catch(()=>{});lastGuideKey='';lastQueueCurrent=-1;updateGuides();updatePlatforms(0,true);fitBoardCamera();
 }
 function chosenCell(){
@@ -174,7 +178,7 @@ function updateGuides(){
 }
 function turn(dir){
   if(mode!=='playing'||!['cruise','air'].includes(phase))return;
-  selected+=dir;spinJuice=1;tapKick=dir*.32;pieceRoot.rotation.y=-dir*.12;
+  selected+=dir;spinJuice=1;tapKick=dir*.32;
   if(phase==='air'){visualSpin+=dir*.80;spinner.rotation.y=FORWARD_YAW+circuit[current].heading+visualSpin;}
   else{spinner.rotation.y=FORWARD_YAW+circuit[current].heading+tapKick;spinner.rotation.z=-dir*.12;}
   audio.spin(selected);updateGuides();
@@ -217,7 +221,7 @@ function update(dt){
     }else if(phase==='air'){
       jumpTime+=dt;const t=Math.min(1,jumpTime/airDuration),p=rotateGrid(flightPoint(selected,t),origin.heading);
       knight.position.x=(origin.launch.x+p.x)*CELL_SIZE;knight.position.z=(origin.launch.z+p.z)*CELL_SIZE;
-      knight.position.y=GROUND+Math.sin(t*Math.PI)*3.0;
+      knight.position.y=GROUND+Math.sin(t*Math.PI)*4.8;
       visualSpin+=wrapAngle(flightHeading(selected,t)-visualSpin)*(1-Math.exp(-dt*24));spinner.rotation.y=FORWARD_YAW+origin.heading+visualSpin;
       spinner.rotation.z=Math.sin(t*Math.PI)*.08*Math.sign(selected);spinner.rotation.x=Math.sin(t*Math.PI)*.12;
       if(t===1){
@@ -233,14 +237,20 @@ function update(dt){
   }
   if(mode==='playing'||mode==='start'||mode==='won'){
     updatePlatforms(dt);
-    pieceRoot.scaling.setAll(phase==='air'?1+Math.sin(Math.min(1,jumpTime/airDuration)*Math.PI)*.18:1);pieceRoot.rotation.y=-tapKick*.3;
+    const t=phase==='air'?Math.min(1,jumpTime/airDuration):0;
+    const squash=phase==='cruise'?Math.max(0,1-phaseTime/.18)*.12:0;
+    knight.scaling.set(1.38*(1+squash/2),1.38*(1-squash),1.38*(1+squash/2));
+    el('flight-dot').setAttribute('cx',String(10+80*t));el('flight-dot').setAttribute('cy',String(30-88*t*(1-t)));
+    el('flight-indicator').classList.toggle('in-air',phase==='air');
     glow.intensity=.43+audio.pulse*.10;
-    shadow.position.set(knight.position.x,PLATFORM_TOP+.018,knight.position.z);shadow.scaling.setAll(Math.max(.6,1.55-(knight.position.y-GROUND)*.10));
-    shadow.setEnabled(phase!=='fall'&&platforms.some((p,i)=>{
+    const abovePlatform=platforms.some((p,i)=>{
       if(!p.root.isEnabled()||p.stage==='falling'||p.root.position.y<PLATFORM_TOP-.1)return false;
       const stop=circuit[i],local=rotateGrid({x:knight.position.x-stop.x*CELL_SIZE,z:knight.position.z-stop.z*CELL_SIZE},-stop.heading);
       return Math.abs(local.x)<1.85&&local.z>-1.85&&local.z<stop.runLength*CELL_SIZE+1.85;
-    }));
+    });
+    const surface=abovePlatform?PLATFORM_TOP+.05:-2.015,altitude=Math.max(0,knight.position.y-surface);
+    shadow.position.set(knight.position.x,surface,knight.position.z);shadow.scaling.setAll(1.38+altitude*.06);
+    shadow.material.alpha=Math.max(.16,.44-altitude*.03);shadow.setEnabled(phase!=='fall');
 
     for(const p of burstPieces){if(p.life>0){p.life-=dt;p.mesh.position.addInPlace(p.velocity.scale(dt));p.velocity.y-=dt*12;p.mesh.scaling.setAll(Math.max(0,p.life/.6));if(p.life<=0)p.mesh.setEnabled(false);}}
     flash=Math.max(0,flash-dt*3.5);el('flash').style.opacity=flash*.35;

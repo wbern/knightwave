@@ -8,9 +8,9 @@ await mkdir(output,{recursive:true});
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const report=[];
 try {
-  for(const phone of [false,true]){
-    const name=phone?'phone':'desktop';
-    const context=await browser.newContext({viewport:phone?{width:390,height:844}:{width:1280,height:800},deviceScaleFactor:phone?2:1,isMobile:phone,hasTouch:phone,recordVideo:{dir:output,size:phone?{width:390,height:844}:{width:1280,height:800}}});
+  for(const layout of [{name:'desktop',width:1280,height:800,phone:false},{name:'phone',width:390,height:844,phone:true},{name:'compact',width:375,height:667,phone:true},{name:'landscape',width:844,height:390,phone:true}]){
+    const {name,phone}=layout;const size={width:layout.width,height:layout.height};
+    const context=await browser.newContext({viewport:size,deviceScaleFactor:phone?2:1,isMobile:phone,hasTouch:phone,recordVideo:{dir:output,size}});
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(url);await page.waitForFunction(()=>window.knightwave&&document.getElementById('loading').classList.contains('hidden'));
     await page.screenshot({path:`${output}/${name}-start.png`});
@@ -34,9 +34,10 @@ try {
           const boardBounds={left:Math.min(...boardPoints.map(p=>p.x))/innerWidth,right:Math.max(...boardPoints.map(p=>p.x))/innerWidth,top:Math.min(...boardPoints.map(p=>p.y))/innerHeight,bottom:Math.max(...boardPoints.map(p=>p.y))/innerHeight};
           const queue=document.getElementById('move-queue').getBoundingClientRect();
           const overlapsQueue=boardBounds.left*innerWidth<queue.right&&boardBounds.right*innerWidth>queue.left&&boardBounds.top*innerHeight<queue.bottom&&boardBounds.bottom*innerHeight>queue.top;
-          const result={overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
+          const knightOverlapsQueue=bounds.left*innerWidth<queue.right&&bounds.right*innerWidth>queue.left&&bounds.top*innerHeight<queue.bottom&&bounds.bottom*innerHeight>queue.top;
+          const result={knightOverlapsQueue,overlapsQueue,jump:state.jump,phase:state.phase,airtime:state.airtime,bounds,boardBounds,cameraMoved:JSON.stringify(state.camera)!==JSON.stringify(window.visualAudit.camera),roll:camera.rotation.z,landing:{x:pad.x/innerWidth,y:pad.y/innerHeight}};
           window.visualAudit.samples.push(result);
-          if(result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
+          if(result.knightOverlapsQueue||result.overlapsQueue||result.cameraMoved||boardBounds.left<0||boardBounds.right>1||boardBounds.top<.15||boardBounds.bottom>.9||bounds.left<0||bounds.right>1||bounds.top<(innerWidth<700?.15:.10)||bounds.bottom>.9)window.visualAudit.clipped.push(result);
         }
         requestAnimationFrame(sample);
       }

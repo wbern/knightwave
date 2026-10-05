@@ -23,7 +23,8 @@ try {
     assert.equal(await page.locator('#board-labels span').count(),16);
     const initial=await page.evaluate(()=>window.knightwave.state());
     assert.deepEqual(initial.board,{min:-4,max:3,cells:64,extent:16});
-    assert.equal(initial.camera.orthographic,true);assert.ok(initial.camera.y>40);assert.ok(Math.abs(initial.camera.rotation.x-Math.PI/2)<.00001);
+    assert.equal(initial.camera.orthographic,true);assert.ok(initial.camera.y>40);assert.ok(initial.camera.rotation.x>.65&&initial.camera.rotation.x<1.1,'Camera shows depth while keeping ranks aligned');
+    assert.equal(await page.evaluate(()=>window.knightwave.scene.getMeshByName('turned chess pedestal')?.getTotalVertices()>100),true);
     const press=async dir=>phone?await page.getByRole('button',{name:dir>0?'Rotate knight right':'Rotate knight left'}).tap():await page.keyboard.press(dir>0?'ArrowRight':'ArrowLeft');
     for(let jump=1;jump<=6;jump++){
       await page.waitForFunction(n=>{const s=window.knightwave.state();return s.jump===n&&s.phase==='cruise'},jump);
@@ -55,6 +56,10 @@ try {
         await page.waitForTimeout(180);assert.equal((await page.evaluate(()=>window.knightwave.state())).airtime,paused.airtime);
         await page.getByRole('button',{name:'Keep riding'}).click();
         await page.waitForTimeout(160);assert.ok((await page.evaluate(()=>window.knightwave.state())).sparkles>0);
+        assert.equal(await page.locator('#flight-indicator').evaluate(e=>e.classList.contains('in-air')),true);
+        assert.equal(await page.evaluate(()=>window.knightwave.scene.getMeshByName('hover shadow').isEnabled()),true);
+        const separation=await page.evaluate(()=>{const g=window.knightwave,c=g.scene.activeCamera,point=g.scene.getTransformNodeByName('knight').position.clone(),identity=g.scene.meshes[0].getWorldMatrix().constructor.Identity(),viewport=c.viewport.toGlobal(innerWidth,innerHeight);const elevated=point.constructor.Project(point,identity,g.scene.getTransformMatrix(),viewport);point.y=-2.015;const ground=point.constructor.Project(point,identity,g.scene.getTransformMatrix(),viewport);return ground.y-elevated.y;});
+        assert.ok(separation>12,'Airtime must show visible separation above the ground');
         await page.screenshot({path:`/tmp/knightwave-${name}-midair-final.png`});
       }
       await page.waitForFunction(n=>window.knightwave.state().landings===n,jump,{timeout:6000});

@@ -24,3 +24,6 @@ button,canvas{-webkit-tap-highlight-color:transparent}.track-name{background:#12
 .queue-track{position:relative;transition:transform .24s ease-out}.move-group.consumed{opacity:.2}
 @media(prefers-reduced-motion:reduce){.queue-track{transition:none}}
 @media(max-height:550px) and (orientation:landscape){.run-label{top:94px}}
+
+.flight-indicator{width:82px;height:33px;flex-shrink:0;margin-left:auto;overflow:visible;color:#a99abc;opacity:.5}.flight-indicator path{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}.flight-ground{opacity:.35}.flight-arc{stroke-dasharray:3 4}.flight-indicator circle{fill:currentColor}.flight-indicator.in-air{color:#c0ffe6;opacity:1}.flight-indicator.in-air circle{filter:drop-shadow(0 0 3px #baffeb88)}
+@media(max-width:700px){.flight-indicator{width:60px;height:27px}.queued-moves{max-width:160px}}
