@@ -7,11 +7,11 @@ A Babylon.js chess arcade game with ordered knight combos, rising single-square 
 The existing public version is [Knightwave](https://pages.bernting.se/knightwave/). GitHub Pages checks and publishes `main` via `.github/workflows/pages.yml`.
 
 ```sh
-npm ci
-npm run dev -- --port 5179
+pnpm install --frozen-lockfile
+pnpm dev --port 5179
 ```
 
-`npm run build` produces the standalone game in `dist`.
+`pnpm build` produces the standalone game in `dist`.
 
 ## Controls
 
@@ -46,8 +46,8 @@ The existing *Stardust Overdrive* soundtrack is synthesized in Web Audio at 160 
 
 ## Verification
 
-`npm test` covers all eight moves, ordered drafts, immutable dispatched groups, partial inputs, rotated/mirrored icons, rounded flight, deterministic branch previews, capture alternatives, invalid fallen squares, bounded storage, 120 queued landings, increasing level thresholds and continuous scrolling.
+`pnpm test` covers all eight moves, ordered drafts, immutable dispatched groups, partial inputs, rotated/mirrored icons, rounded flight, deterministic branch previews, capture alternatives, invalid fallen squares, bounded storage, 120 queued landings, increasing level thresholds and continuous scrolling.
 
-`node verify.mjs` plays desktop and phone layouts; `node mobilecheck.mjs` checks all three phone layouts; `node visualcheck.mjs` checks desktop, phone, compact and landscape. The shared `playcheck.mjs` uses native keys and touches, checks double-tap dispatch, captures, level changes, every-frame camera independence, multi-hop groups, pause, scrolling loss and retry. It captures intro, board, fork, level-up and game-over screens for inspection. Override `CHROME_PATH`, `KNIGHTWAVE_URL`, `KNIGHTWAVE_JUMPS`, `KNIGHTWAVE_LAYOUTS` or `KNIGHTWAVE_CAPTURES` as needed.
+`pnpm check:smoke` plays desktop and phone layouts; `pnpm check:mobile` checks all three phone layouts; `pnpm check:browser` checks desktop, phone, compact and landscape. The shared `playcheck.mjs` uses native keys and touches, checks double-tap dispatch, captures, level changes, every-frame camera independence, multi-hop groups, pause, scrolling loss and retry. It captures intro, board, fork, level-up and game-over screens for inspection. Override `CHROME_PATH`, `KNIGHTWAVE_URL`, `KNIGHTWAVE_JUMPS`, `KNIGHTWAVE_LAYOUTS` or `KNIGHTWAVE_CAPTURES` as needed.
 
 Current validation status is recorded in [docs/verification.md](docs/verification.md). Existing screenshots under `docs/screenshots` predate this update unless labelled as CPU geometry previews. A CPU projection is not a substitute for checking the running browser's shaders and CSS.
