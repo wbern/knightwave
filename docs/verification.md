@@ -1,6 +1,6 @@
 # Combo and independent-scroll update validation
 
-Validated locally on 2026-10-06. The public site still runs the previous version; this update has not been published.
+Validated locally on 2026-10-06. Native browser and soundtrack results are recorded below.
 
 - `pnpm test`: 19 tests passed. Includes all eight knight moves, ordered input/draft/queue behavior, icon transforms, rounded flight and tricks, branches and captures, falling-square rejection, 120 predicted queued landings, bounded storage and level/scroll progression.
 - `pnpm build`: production build passed.
@@ -11,17 +11,21 @@ Validated locally on 2026-10-06. The public site still runs the previous version
 
 The project pins pnpm 10.34.5, uses `pnpm-lock.yaml`, and permits the esbuild install script. The former npm lockfile was converted using pnpm with locally cached metadata derived from its existing entries and installed manifests. All 68 package versions and integrity hashes were compared and preserved, including all optional dependency edges and Linux esbuild/Rollup binaries. A frozen lockfile-only validation passed. Tests and the build passed through pnpm with the existing installed modules; a fresh dependency install and the updated GitHub workflow still need network access. CI installs pnpm before configuring the Node/pnpm cache, then runs a frozen install, tests and build.
 
-## Remaining browser and deployment checks
+## Native browser and soundtrack validation
 
-The current managed sandbox prevents opening the local preview listener (`listen EPERM`) and aborts Chrome on launch. A read-only GitHub remote check also failed because `github.com` could not resolve. These environment restrictions prevent running the native browser checks or publishing this build in this session.
+Validated on the local Mac on 2026-10-06:
 
-Once preview/browser/network access is available, run:
+- `node --test src/*.test.js`: all 19 tests passed.
+- `node node_modules/vite/bin/vite.js build`: production build passed, including the four bundled M4A recordings. Vite reports its existing large-chunk warning.
+- `node verify.mjs`: desktop and phone checks passed for combos, double-tap dispatch, captures, level changes, camera-independent scrolling, pause, multi-hop groups and retry. Screenshots and audits are under `/tmp/knightwave-combos`.
+- Remaining native browser checks also passed for compact phone (375×667) and landscape (844×390). Screenshots and frame audits are under `/tmp/knightwave-remaining`. Desktop/phone and compact/landscape board, midair and capture-choice screenshots were inspected for framing and control placement. The obsolete menu soundtrack title was updated to *Nebula Checkmate Run*.
+- `node audiocheck.mjs`: all four recordings decoded and played; checked level order, phrase continuity, final speed cap, looping configuration, pause/resume, mute and resetting to the slowest recording on retry.
+- Chrome DevTools MCP 1.6.0 initialized through the same launcher used by `~/gc2`, advertised its browser tools, opened the local game and evaluated its title and `window.knightwave` availability. Project configuration is in `.codex/config.toml`. Restart the Codex client/session to expose newly configured MCP tools.
 
-```sh
-pnpm dev --port 5179
-pnpm check:browser
-```
+The local `pnpm` shim requires an unavailable `corepack`; `npx --yes pnpm@10.34.5` runs the pinned package manager. The release checks use a frozen pnpm install, tests and build.
 
-Inspect the desktop, phone, compact and landscape captures under `/tmp/knightwave-combos`, including intro, forks, level-up and game-over. Then publish via the existing `main` GitHub Pages workflow and repeat `verify.mjs` against `KNIGHTWAVE_URL=https://pages.bernting.se/knightwave/`.
+## Deployment verification
+
+The existing `main` GitHub Pages workflow publishes the game. After deployment, repeat `verify.mjs` against `KNIGHTWAVE_URL=https://pages.bernting.se/knightwave/`.
 
 The existing images in `docs/screenshots` belong to the previous released build.
