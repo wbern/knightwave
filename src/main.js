@@ -236,7 +236,9 @@ function beginJump(){
   const origin=course.at(current),offset=knightDestination(pending.moves[moveIndex]),cell={x:origin.x+offset.x,z:origin.z+offset.z};
   if(course.match(cell)){
     const target=Vector3.Project(new Vector3(cell.x*CELL_SIZE,GROUND,cell.z*CELL_SIZE),Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(innerWidth,innerHeight));
-    if(target.y<arena.top+60)return false;
+    const pixelsPerUnit=innerWidth/(camera.orthoRight-camera.orthoLeft);
+    const flightClearance=(4.8+4.7)*Math.cos(camera.rotation.x)*pixelsPerUnit+22;
+    if(target.y<arena.top+Math.max(60,flightClearance))return false;
   }
   const group=premoves.locked?pending:premoves.begin();if(!group)return false;
   selected=group.moves[moveIndex];phase='air';jumpTime=0;airDuration=Math.max(.70,1.05-(progression(landings).level-1)*.025);phaseTime=0;trick.rotation.set(0,0,0);burst();updateGuides();return true;
