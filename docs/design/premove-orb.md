@@ -1,6 +1,6 @@
-# Premove orb refinement
+# Premove orb and scrolling-board refinement
 
-The player composes one platform's chained knight move in a fixed UI orb, dispatches it, and begins composing the next platform. The banner is a record of the player's committed moves, not a strip of revealed answers.
+The player composes ordered knight moves in a fixed UI orb. Space sends a desktop plan; double-tapping the orb sends a touch plan. The slim banner records committed moves and provides no answers.
 
 ## Research and application
 
@@ -10,25 +10,20 @@ The player composes one platform's chained knight move in a fixed UI orb, dispat
 
 These sources inform the design; the orb metaphor and dispatch behavior are decisions specific to Knightwave, not experimentally validated claims about children.
 
-## Interaction contract
 
-1. Left/right adds or undoes north-facing L moves in the orb. This edits the draft, never the knight's current flight.
-2. Space, an upward swipe, or a tap on the orb sends one nonempty group to the banner and clears the orb. An empty dispatch is ignored. Each group corresponds to exactly one upcoming platform.
-3. Every group starts facing up: each icon means two ranks forward and one file across. The same up-facing icons repeat within longer groups, with a four-icon draft limit and eight-group queue capacity. Thin vertical dividers express dispatch boundaries. No NOW heading, answer strip, panel background or boxed icons.
-4. A group locks at takeoff. It stays visible during flight, with a small progress underline, and disappears at touchdown. The next draft can be composed during this flight.
-5. On a square without a committed group the knight waits, with a gentle bob. Dispatch resumes motion. A wrong dispatched move still misses; plan using the raised platforms.
-6. Backspace or a downward swipe recalls the last unstarted group into the orb, so an accidental commit can be corrected. Escape or the pause button pauses.
-7. A swipe must be predominantly vertical and cover a meaningful distance; a drag or canceled gesture must not accidentally append or dispatch a move. Touch-side feedback remains immediate.
+## Current interaction contract
+
+1. Four direction controls compose ordered perpendicular pairs. The first direction is two squares and the second one square. Partial input responds immediately with a dashed stem. Every complete pair has its own rotated or mirrored L glyph.
+2. A draft may contain four pairs. Incomplete drafts cannot dispatch. Parallel input replaces the unfinished stem, and recall clears the draft before retrieving a prior unstarted group.
+3. Double-tap dispatch applies to the orb only, so entering a pair does not accidentally send it. A single orb touch has visual feedback but never launches. Space or a mouse click dispatches on desktop.
+4. Sent groups lock once execution begins. Each pair lands separately, completed icons disappear, and the group's underline reflects total progress. The next draft remains editable.
+5. Autoscrolling advances independently of the knight. A queued jump to a valid platform above the visible area waits for the platform to arrive; it cannot pull the camera forward.
+6. Both fork options continue the course. Captures earn extra points, with actual mesh silhouettes and gold rails differentiating them from empty mint-edged decks. A detour can spend scrolling safety.
 
 ## Visual contract
 
-- Maintain the nonrotating front-facing 3D camera, aligned chess axes and high-resolution sculpted knight.
-- Recessed squares use two dark, low-saturation tones. Raised decks retain bright chess surfaces, shallow side faces and shadows. Their tops sit 0.925 world units above the floor, keeping the board recognizable. Brightness denotes elevation, not whether an answer is correct.
-- A physical raised rim traces every square, with each raised platform occupying exactly one square. Floor rims remain subtle; platform rims read more clearly.
-- The energy orb is a shaded SVG sphere and orbit fixed below the board between the controls. Landscape places it beside the board. Crisp L glyphs show the editable draft; only charge and dispatch animate the orb. It has no enclosing panel and occupies no game-world space.
-- The premove row occupies roughly one icon height on phones. Turn and dispatch controls have comfortable invisible hit areas around small graphics, without large button panels.
-- Jumps depart from square centers without a run-up. A 0.30-second pause makes each queued landing readable before the next jump.
-- Scene lighting and glow remain constant. Local landing sparkles replace full-screen flashes.
-- Airborne L corners are rounded at a 0.28-square radius with steady arc-length travel; exact landing squares stay aligned to the grid and the knight returns to face north. The committed chain determines full spins and barrel rolls around a centered model pivot, finishing before touchdown.
-- The camera translates smoothly forward. Recycled ground rows preserve parity and physical rims; five reusable single-square platforms keep rendering bounded. Ranks advance indefinitely without a finish line.
-- Validate continued play beyond six landings and capture charging, dispatch, flight, waiting, recall, rising/falling decks and compact/landscape layouts. Automated checks are followed by screenshot inspection.
+The board contains precisely eight files, dark recessed squares, low raised platforms and physical side rails. Desktop width is capped; mobile keeps gutters and a borderless four-direction pad beside the orb. A shallow square platform retains its chess identity. The camera never rotates or follows position. Small progress and level cues stay above the board; the danger seam stays at its bottom. Lighting stays steady, and aerial trick rotations settle north before each landing.
+
+## Progression reference
+
+The exact Knight Strike source was found in the user's local chess project: `chessreel/src/components/KnightStrike/useKnightStrikeGame.ts`, `src/utils/knight-strike-difficulty.ts`, `src/config/knight-strike-config.ts`, and `src/routes/tools.knight-strike.tsx`. Its increasing 11, 12, 13… milestones and brief level-up feedback inform this game's progression. Knightwave counts all successful landings and raises speed monotonically instead of copying Knight Strike's periodic difficulty waves.

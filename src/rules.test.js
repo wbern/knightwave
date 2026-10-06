@@ -1,16 +1,23 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {knightDestination,knightPath,isLandingMatch} from './rules.js';
-test('each chained L starts north and advances two ranks, with mirrored lateral steps',()=>{
- for(const turns of [-4,-3,-2,-1,0,1,2,3,4]){
-  assert.deepEqual(knightDestination(turns),{x:turns,z:2*Math.abs(turns)});
-  const path=knightPath(turns);assert.deepEqual(path.at(-1),knightDestination(turns));
-  for(let i=0;i<Math.abs(turns);i++){
-   assert.equal(path[i*2+1].z-path[i*2].z,2);assert.equal(path[i*2+1].x,path[i*2].x);
-   assert.equal(path[i*2+2].x-path[i*2+1].x,Math.sign(turns));assert.equal(path[i*2+2].z,path[i*2+1].z);
-  }
+const cases=[['up','left',-1,2],['up','right',1,2],['right','up',2,1],['right','down',2,-1],['down','right',1,-2],['down','left',-1,-2],['left','down',-2,-1],['left','up',-2,1]];
+test('all eight ordered direction pairs land on distinct chess knight squares',()=>{
+ const endpoints=new Set();
+ for(const [first,second,x,z] of cases){
+  const move={first,second},path=knightPath(move);
+  assert.deepEqual(knightDestination(move),{x,z});endpoints.add(`${x},${z}`);
+  assert.equal(Math.abs(path[1].x)+Math.abs(path[1].z),2);
+  assert.equal(Math.abs(path[2].x-path[1].x)+Math.abs(path[2].z-path[1].z),1);
+  assert.equal(Math.abs(path[1].x*(path[2].x-path[1].x)+path[1].z*(path[2].z-path[1].z)),0);
  }
+ assert.equal(endpoints.size,8);
 });
-test('opposite inputs undo a draft and different groups cannot alias a landing',()=>{
- assert.ok(isLandingMatch(3-1,2));assert.ok(!isLandingMatch(4,0));assert.ok(!isLandingMatch(-1,1));
+test('chained moves preserve input order and landing comparison uses the endpoint',()=>{
+ const moves=[{first:'up',second:'left'},{first:'right',second:'up'}];
+ assert.deepEqual(knightPath(moves),[{x:0,z:0},{x:0,z:2},{x:-1,z:2},{x:1,z:2},{x:1,z:3}]);
+ assert.deepEqual(knightDestination({moves}),{x:1,z:3});
+ assert.deepEqual(knightDestination(['up','left','right','up']),{x:1,z:3});
+ assert.ok(isLandingMatch(moves,{x:1,z:3}));assert.ok(!isLandingMatch({first:'up',second:'right'},{first:'right',second:'up'}));
+ assert.deepEqual(knightDestination([]),{x:0,z:0});
 });

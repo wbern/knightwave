@@ -1,4 +1,4 @@
-import {knightPath} from './rules.js';
+import {knightPath,normalizeMoves,knightDestination} from './rules.js';
 
 const cache=new Map();
 const mix=(a,b,t)=>({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});
@@ -8,8 +8,9 @@ const smooth=t=>t*t*t*(t*(t*6-15)+10);
 // Round only the airborne corners. The logical L moves and landing squares
 // stay exact; distance along the rounded curve sets a steady travel speed.
 function route(steps){
-  if(cache.has(steps))return cache.get(steps);
-  const path=steps?knightPath(steps):[{x:0,z:0},{x:0,z:3}];
+  const moves=normalizeMoves(steps),key=moves.map(move=>`${move.first}:${move.second}`).join(',');
+  if(cache.has(key))return cache.get(key);
+  const path=moves.length?knightPath(moves):[{x:0,z:0},{x:0,z:3}];
   const points=[path[0]];
   const line=end=>{
     const start=points.at(-1),count=Math.max(1,Math.ceil(length(start,end)*40));
@@ -33,7 +34,7 @@ function route(steps){
     heading+=Math.atan2(Math.sin(tangent-heading),Math.cos(tangent-heading));
     return {...p,distance,heading};
   });
-  const result={samples,distance};cache.set(steps,result);return result;
+  const result={samples,distance};cache.set(key,result);if(cache.size>256)cache.delete(cache.keys().next().value);return result;
 }
 
 export function flightPose(steps,progress){
@@ -49,7 +50,7 @@ export function flightPose(steps,progress){
 export function trickPose(steps,progress){
   const t=Math.max(0,Math.min(1,(progress-.12)/.72)),ease=smooth(t);
   if(t===0)return {yaw:0,roll:0,pitch:0};
-  const direction=Math.sign(steps)||1,count=Math.abs(steps);
+  const moves=normalizeMoves(steps),direction=Math.sign(knightDestination(moves).x)||1,count=moves.length;
   return {yaw:direction*2*Math.PI*(count>=3?2:1)*ease,
     roll:count>=2?direction*2*Math.PI*ease:0,
     pitch:Math.sin(Math.PI*t)*-.16};
