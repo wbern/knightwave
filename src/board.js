@@ -73,7 +73,7 @@ export class EndlessCourse{
   const cell=typeof chosen==='string'?this.platforms.find(p=>p.id===chosen):chosen;
   const landing=cell&&this.match(cell);
   if(!landing)throw new Error('Landing must be a reachable raised platform');
-  const stop={...landing,id:`landed:${this.current.index+1}:${landing.x}:${landing.z}`,index:this.current.index+1,piece:null,bonus:0};
+  const stop={...landing,index:this.current.index+1,piece:null,bonus:0};
   this.history.push(stop);this.maintain();return stop;
  }
  maintain(){this.history=this.history.slice(-3);}

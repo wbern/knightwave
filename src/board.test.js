@@ -100,3 +100,12 @@ test('opening paths are gentle forward staircases and higher levels add tighter 
  }
  assert.equal(tightEarly,0);assert.ok(tightLate/lateCount>.5);
 });
+
+test('landing retains the same platform identity and future fork identities',()=>{
+ const course=new EndlessCourse();
+ for(let i=0;i<120;i++){
+  const target=course.options[i%2],future=course.previewOptions(target);
+  const landed=course.advance(target);assert.equal(landed.id,target.id);
+  assert.deepEqual(course.options.map(p=>p.id),future.map(p=>p.id));
+ }
+});

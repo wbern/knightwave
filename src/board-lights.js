@@ -4,8 +4,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 
-// Course lighting uses a fixed pool. Origins and route flags come from the
-// course's actual preview, so the light trail never invents a possible landing.
+// Course lighting uses a fixed pool of platform corners and edge glints.
 export class BoardLights {
   constructor(scene, { boardMin = -4, boardMax = 3, cellSize = 4, platformTop = -1.1 } = {}) {
     this.scene = scene;
@@ -64,14 +63,6 @@ export class BoardLights {
       star.setEnabled(false);
       return { frame, star };
     });
-    this.links = Array.from({ length: 8 }, (_, i) => {
-      // Each merged chain scales to its exact world-space segment. All dashes
-      // lie below raised squares, leaving their landing surfaces uncluttered.
-      const parts = Array.from({ length: 8 }, (_, n) => box('route dash', .075, .025, .035, 0, 0, .07 + n * .123));
-      const mesh = merge(`future route light ${i}`, parts);
-      mesh.material = this.mint;
-      return mesh;
-    });
     this.rails = [];
     this.railGlints = [];
     for (const [side, edge] of [boardMin - .5, boardMax + .5].entries()) {
@@ -126,19 +117,6 @@ export class BoardLights {
       star.scaling.setAll(.18 + twinkle * (preferred ? .55 : .3));
       star.visibility = (preferred ? .8 : .34) * (.25 + twinkle * .75);
     }
-    const route = stops.filter(p => p.route && p.origin && p.index > current).slice(0, this.links.length);
-    for (const [i, mesh] of this.links.entries()) {
-      const stop = route[i];
-      mesh.setEnabled(Boolean(stop));
-      if (!stop) continue;
-      const dx = (stop.x - stop.origin.x) * this.cellSize;
-      const dz = (stop.z - stop.origin.z) * this.cellSize;
-      mesh.position.set(stop.origin.x * this.cellSize, -1.84, stop.origin.z * this.cellSize);
-      mesh.rotation.y = Math.atan2(dx, dz);
-      mesh.scaling.z = Math.hypot(dx, dz);
-      mesh.material = stop.piece ? this.gold : this.mint;
-      mesh.visibility = stop.index === current + 1 ? .68 : .34;
-    }
   }
 
   reset() {
@@ -146,11 +124,10 @@ export class BoardLights {
     this.rails.forEach(mesh => mesh.setEnabled(false));
     this.railGlints.forEach(({ mesh }) => mesh.setEnabled(false));
     this.platforms.forEach(({ frame, star }) => { frame.setEnabled(false); star.setEnabled(false); });
-    this.links.forEach(mesh => mesh.setEnabled(false));
   }
 
   get state() {
     return { platforms: this.platforms.filter(({ frame }) => frame.isEnabled()).length,
-      links: this.links.filter(mesh => mesh.isEnabled()).length, pooledMeshes: 48 };
+      links: 0, pooledMeshes: 40 };
   }
 }

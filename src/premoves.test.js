@@ -37,3 +37,12 @@ test('incomplete and invalid triples do not dispatch or consume charge capacity'
  assert.equal(p.edit('down'),false);assert.deepEqual(p.draft,['up','left']);assert.equal(p.edit('up'),true);assert.equal(p.dispatch().moves.length,1);
  const straight=new Premoves();straight.edit('up');straight.edit('up');assert.equal(straight.edit('up'),false);assert.equal(straight.dispatch(),null);straight.edit('left');assert.equal(straight.dispatch().moves.length,1);
 });
+
+test('undo removes one input at a time and never changes an executing group',()=>{
+ const p=new Premoves();add(p);const executing=p.dispatch();p.begin();
+ add(p,'left','up');const pending=p.dispatch();p.edit('down');p.edit('down');
+ assert.deepEqual(p.undo(),{direction:'down'});assert.deepEqual(p.draft,['down']);
+ p.undo();assert.deepEqual(p.draft,[]);assert.equal(p.undo(),pending);
+ assert.deepEqual(p.draft,['left','left','up']);p.undo();assert.deepEqual(p.draft,['left','left']);p.undo();p.undo();
+ assert.equal(p.undo(),null);assert.equal(p.groups[0],executing);assert.equal(p.locked,true);
+});

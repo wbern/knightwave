@@ -38,7 +38,7 @@ app.innerHTML=`<canvas id="world" aria-label="Knightwave endless 3D chess course
   <div class="run-label hidden" id="run-label"><span id="level-label">LEVEL 01</span><span id="jump-label"></span><span id="level-progress"><i></i></span></div><div id="scroll-seam" class="scroll-seam hidden"><span id="scroll-status"></span></div>
   <section id="move-queue" class="move-queue hidden" aria-label="Dispatched premoves"><div class="queue-window"><div id="queue-track" class="queue-track"></div></div></section>
   <div class="controls-dock hidden" id="controls-dock"><div class="touch-controls" id="touch-controls"><button class="turn-button" id="up" aria-label="Compose up">${directionGlyph('up')}</button><button class="turn-button" id="left" aria-label="Compose left">${directionGlyph('left')}</button><button class="turn-button" id="right" aria-label="Compose right">${directionGlyph('right')}</button><button class="turn-button" id="down" aria-label="Compose down">${directionGlyph('down')}</button></div><button id="orb-send" class="orb-send hidden" aria-label="Dispatch premove"><svg class="orb-art" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="orb-shell" cx="35%" cy="27%" r="75%"><stop offset="0" stop-color="#78d4bc" stop-opacity=".8"/><stop offset=".5" stop-color="#164a43" stop-opacity=".95"/><stop offset="1" stop-color="#062723"/></radialGradient></defs><circle cx="50" cy="50" r="37" fill="url(#orb-shell)" stroke="#98e9cf" stroke-opacity=".6"/><ellipse cx="50" cy="50" rx="46" ry="17" transform="rotate(-30 50 50)" fill="none" stroke="#baffeb" stroke-opacity=".55"/><path d="M26 35Q31 20 46 21" fill="none" stroke="#e4fff4" stroke-opacity=".65" stroke-width="2" stroke-linecap="round"/></svg><span id="orb-glyphs" class="orb-glyphs"></span><span id="orb-charge-count" class="orb-charge-count"></span><span class="orb-charge-pips" aria-hidden="true"><i></i><i></i><i></i><i></i></span></button>
-  </div><div id="board-labels" class="board-labels" aria-hidden="true"></div>
+  <button id="undo" class="undo-button" aria-label="Undo last input" title="Undo (Backspace)"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M11 9H5V3M5 9c3-4 10-5 15-2s7 10 4 15-10 7-15 4" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><div id="direction-feedback" class="direction-feedback" aria-hidden="true"></div><div id="board-labels" class="board-labels" aria-hidden="true"></div>
   <div id="gesture-caption" class="gesture-caption hidden">THREE DIRECTIONS · TAP ORB TO SEND</div>
   <div id="combo-display" class="combo-display hidden" aria-live="polite"><strong id="combo-count"></strong><span id="combo-caption">COMBO</span></div>
   <div class="modal-shade hidden" id="modal"></div>
@@ -98,14 +98,16 @@ el('best').textContent=String(best).padStart(5,'0');
 const board=new TransformNode('endless chessboard',scene),boardWidth=BOARD_CELLS*CELL_SIZE;
 let scrollZ=4,firstRow=-12,arena={top:160,bottom:innerHeight-122,left:0,right:innerWidth};
 const boardCenter=BOARD_CENTER*CELL_SIZE;
+const VISUAL_COLS=32;
 const foundation=material('board foundation','#211e2d',.025);
-box('endless board foundation',GRID_COLS*CELL_SIZE,.7,GRID_ROWS*CELL_SIZE,boardCenter,-2.5,-CELL_SIZE/2,foundation,board);
+const boardFoundation=box('endless board foundation',GRID_COLS*CELL_SIZE,.7,GRID_ROWS*CELL_SIZE,boardCenter,-2.5,-CELL_SIZE/2,foundation,board);
 const lightSquare=material('ivory chess square','#f0e1ff',.22),darkSquare=material('plum chess square','#685799',.15);
 const recessedLight=material('recessed light square','#333254',.06),recessedDark=material('recessed dark square','#191c37',.035),floorRim=material('recessed square rim','#625087',.10);
-const tiles=[[],[]],rails=[];
-for(let row=-GRID_ROWS/2;row<GRID_ROWS/2;row++)for(let col=-GRID_COLS/2;col<GRID_COLS/2;col++){
+const tiles=[[],[]],outerTiles=[[],[]],outerFloors=[],rails=[];
+for(let row=-GRID_ROWS/2;row<GRID_ROWS/2;row++)for(let col=-VISUAL_COLS/2;col<VISUAL_COLS/2;col++){
   const parity=Math.abs((col+row)%2);
-  tiles[parity].push(box('chess square',CELL_SIZE-.025,.08,CELL_SIZE-.025,col*CELL_SIZE,-2.065,row*CELL_SIZE,parity?recessedLight:recessedDark));
+  const collection=col>=-GRID_COLS/2&&col<GRID_COLS/2?tiles:outerTiles;
+  collection[parity].push(box('chess square',CELL_SIZE-.025,.08,CELL_SIZE-.025,col*CELL_SIZE,-2.065,row*CELL_SIZE,parity?recessedLight:recessedDark));
 }
 for(let i=0;i<=GRID_COLS;i++)rails.push(box('square rim',.075,.16,GRID_ROWS*CELL_SIZE,(-GRID_COLS/2-.5+i)*CELL_SIZE,-1.97,-CELL_SIZE/2,floorRim));
 for(let i=0;i<=GRID_ROWS;i++)rails.push(box('square rim',GRID_COLS*CELL_SIZE,.16,.075,boardCenter,-1.97,(-GRID_ROWS/2-.5+i)*CELL_SIZE,floorRim));
@@ -113,6 +115,7 @@ for(let i=0;i<=GRID_ROWS;i++)rails.push(box('square rim',GRID_COLS*CELL_SIZE,.16
 for(const [name,meshes] of [['dark chess grid',tiles[0]],['light chess grid',tiles[1]],['raised square rims',rails]]){
   const merged=Mesh.MergeMeshes(meshes,true,true);merged.name=name;merged.parent=board;merged.receiveShadows=true;glow.addExcludedMesh(merged);
 }
+for(const [name,meshes] of [['outer dark chess grid',outerTiles[0]],['outer light chess grid',outerTiles[1]]]){const merged=Mesh.MergeMeshes(meshes,true,true);merged.name=name;merged.parent=board;merged.receiveShadows=true;glow.addExcludedMesh(merged);outerFloors.push(merged);}
 const boardEdge=material('chessboard side rail','#766580',.05);
 for(const x of [(BOARD_MIN-.5)*CELL_SIZE,(BOARD_MAX+.5)*CELL_SIZE]){
   const edge=box('physical board edge',.20,.42,GRID_ROWS*CELL_SIZE,x,-1.87,-CELL_SIZE/2,boardEdge,board);edge.receiveShadows=true;glow.addExcludedMesh(edge);
@@ -140,17 +143,17 @@ const platforms=Array.from({length:12},(_,i)=>{
 function upcomingPlatforms(){
   if(mode==='level-clear'||(mode==='paused'&&pausedMode==='level-clear'))return [...course.history];
   const pending=premoves.groups.flatMap((g,i)=>i===0&&premoves.locked?g.moves.slice(moveIndex):g.moves);
-  const draft=normalizeMoves(premoves.draft),depth=previewDepth(progression(landings).level,current,course.seed);
-  return previewPlatforms(course,[...pending,...draft],depth).slice(0,platforms.length);
+  const depth=previewDepth(progression(landings).level,current,course.seed);
+  return previewPlatforms(course,pending,depth).slice(0,platforms.length);
 }
 function updatePlatforms(dt,reset=false){
   const wanted=upcomingPlatforms(),active=new Set();
   for(const stop of wanted){
-    let p=platforms.find(p=>p.index===stop.id);
+    let p=platforms.find(p=>p.stop?.x===stop.x&&p.stop?.z===stop.z);
     if(!p)p=platforms.find(p=>!active.has(p)&&!wanted.some(s=>s.id===p.index));
     if(!p)continue;active.add(p);
     const stage=stop.index<current?'falling':stop.id===course.at(current).id?'occupied':stop.preview?'rising':'target';
-    if(reset||p.index!==stop.id||(stage==='falling'&&p.stage!=='falling'))p.age=mode==='start'&&stage!=='falling'?PLATFORM_RISE_SECONDS:0;else p.age+=dt;p.stage=stage;p.index=stop.id;p.stop=stop;
+    if(reset||p.stop?.x!==stop.x||p.stop?.z!==stop.z||(stage==='falling'&&p.stage!=='falling'))p.age=(reset||mode==='start')&&stage!=='falling'?PLATFORM_RISE_SECONDS:0;else p.age+=dt;p.stage=stage;p.index=stop.id;p.stop=stop;
     const pose=platformPose(stage==='target'&&p.age<PLATFORM_RISE_SECONDS?'rising':stage,p.age);p.root.position.set(stop.x*CELL_SIZE,pose.height,stop.z*CELL_SIZE);p.root.rotation.x=pose.tilt;p.root.setEnabled(pose.visible);
     p.square.material=(stop.x+stop.z)%2!==0?lightSquare:darkSquare;
     const pop=stage==='rising'?Math.min(1,p.age/PLATFORM_RISE_SECONDS):stage==='falling'?Math.max(0,1-p.age/1.1):1;
@@ -165,16 +168,18 @@ function updatePlatforms(dt,reset=false){
 function worldCell(cell){return new Vector3(cell.x*CELL_SIZE,GROUND,cell.z*CELL_SIZE);}
 function fitBoardCamera(){
   const width=innerWidth,height=innerHeight,narrow=width<700,short=height<550&&width>height,intro=mode==='start';
+  const fullScreen=narrow||short;for(const floor of outerFloors)floor.setEnabled(fullScreen);boardFoundation.scaling.x=fullScreen?VISUAL_COLS/GRID_COLS:1;
   const queueBottom=el('move-queue').getBoundingClientRect().bottom;
-  arena={top:intro?(short?76:el('start-screen').getBoundingClientRect().bottom+20):short?76:queueBottom+8,bottom:height-(intro?28:short?24:narrow?138:156),left:0,right:width};
+  arena={top:intro?(short?76:el('start-screen').getBoundingClientRect().bottom+20):short?76:queueBottom+8,bottom:height-(intro?28:short?24:narrow?196:156),left:0,right:width};
   const introSide=intro&&short,centerX=introSide?.75:short?.32:.5;
-  const maxWidth=introSide?width*.42:short?width*.52:Math.min(width-(narrow?12:40),650);
+  const maxWidth=introSide?width*.42:short?width*.52:Math.min(narrow?width*(boardWidth+2.6)/boardWidth:width-40,650);
   const boardPixels=Math.max(100,Math.min(maxWidth,(arena.bottom-arena.top)*1.2));
   const halfWidth=(boardWidth+2.6)/boardPixels*width/2,halfHeight=halfWidth*height/width;
   const centerY=(arena.top+arena.bottom)/2/height;
   const offsetX=(.5-centerX)*2*halfWidth,offsetY=(centerY-.5)*2*halfHeight;
   camera.orthoLeft=-halfWidth+offsetX;camera.orthoRight=halfWidth+offsetX;camera.orthoTop=halfHeight+offsetY;camera.orthoBottom=-halfHeight+offsetY;
   const side=boardPixels/2+10;arena.left=Math.max(narrow?4:12,centerX*width-side);arena.right=Math.min(width-(narrow?4:12),centerX*width+side);
+  if(narrow){arena.left=0;arena.right=width;}
   for(const [name,value] of Object.entries(arena))canvas.style.setProperty('--scene-'+name,value+'px');
   el('scroll-seam').style.cssText=`left:${arena.left+10}px;right:${width-arena.right+10}px;top:${arena.bottom-27}px`;
   el('board-labels').innerHTML=Array.from({length:BOARD_CELLS},()=>'<span class="file-label"></span>').join('')+Array.from({length:GRID_ROWS},()=>'<span class="rank-label"></span>').join('');
@@ -228,13 +233,15 @@ function updateGuides(){
   el('orb-send').setAttribute('aria-label',charge?`${charge} charged move${charge>1?'s':''}; tap to dispatch`:'Enter three directions, then tap this orb');
 
 }
+let directionTimer=null;const pressTimers=new Map();
 function turn(dir){
 
   if(mode!=='playing'||phase==='fall'||!premoves.edit(dir))return;
   spinJuice=1;tapKick=(dir==='left'?-1:1)*.32;orbKick=1;el('orb-send').style.setProperty('--orb-scale','1.12');
   if(phase!=='air'){spinner.rotation.y=FORWARD_YAW;spinner.rotation.z=-tapKick*.375;}
   audio.spin(premoves.draft.length);updateGuides();
-  const button=el(dir);button.classList.add('pressed');setTimeout(()=>button.classList.remove('pressed'),90);
+  const button=el(dir);button.classList.add('pressed');clearTimeout(pressTimers.get(dir));pressTimers.set(dir,setTimeout(()=>button.classList.remove('pressed'),180));
+  clearTimeout(directionTimer);el('direction-feedback').dataset.direction=dir;el('direction-feedback').classList.add('active');directionTimer=setTimeout(()=>el('direction-feedback').classList.remove('active'),180);
 }
 function beginJump(){
   const pending=premoves.groups[0];if(!pending)return false;
@@ -260,6 +267,10 @@ function dispatch(){
   }
   if(phase==='waiting')beginJump();return true;
 }
+function undo(){
+  if(mode!=='playing'||phase==='fall'||!premoves.undo())return false;
+  orbKick=.65;audio.spin(premoves.draft.length);updateGuides();return true;
+}
 function recall(){
   if(mode!=='playing'||phase==='fall')return false;
   if(!premoves.recall())return false;orbKick=1;audio.spin(premoves.draft.length);updateGuides();return true;
@@ -277,7 +288,7 @@ function modal(content){el('modal').innerHTML=`<div class="dialog" role="dialog"
 function pause(){if(['playing','level-clear'].includes(mode)){pausedMode=mode;setMode('paused');audio.pause();modal('<h2 id="dialog-title">PAUSED</h2><button class="primary" id="resume">RESUME</button><button class="secondary" id="restart">RESTART</button>');el('resume').onclick=resume;el('restart').onclick=start;}else if(mode==='paused')resume();}
 function resume(){visible('modal',false);setMode(pausedMode);if(mode==='playing')audio.start().catch(()=>{});el('world').focus();}
 function help(){const previous=mode;if(['playing','level-clear'].includes(mode)){pausedMode=mode;setMode('paused');audio.pause();}
-  modal('<h2 id="dialog-title">HOW TO PLAY</h2><p>↑ ↑ ← or ← ↑ ↑ = one jump.<br>Stack moves to charge the orb.<br>Space / tap orb sends.<br>Backspace recalls. Escape pauses.<br>Cross the finish. Stay ahead.</p><button class="primary" id="close-help">GOT IT</button>');el('close-help').onclick=()=>{visible('modal',false);if(['playing','level-clear'].includes(previous))resume();};}
+  modal('<h2 id="dialog-title">HOW TO PLAY</h2><p>↑ ↑ ← or ← ↑ ↑ = one jump.<br>Stack moves to charge the orb.<br>Space / tap orb sends.<br>Undo / Backspace erases a press. Escape pauses.<br>Cross the finish. Stay ahead.</p><button class="primary" id="close-help">GOT IT</button>');el('close-help').onclick=()=>{visible('modal',false);if(['playing','level-clear'].includes(previous))resume();};}
 function finish(){
   setMode('over');audio.end('over');levelEffects.setFinish(null);jumpSparkles.emitRate=0;
   if(score>best){best=score;try{localStorage.setItem('knightwave-board-best',String(best));}catch{}el('best').textContent=String(best).padStart(5,'0');}
@@ -285,6 +296,7 @@ function finish(){
 }
 function mute(){el('sound').textContent=audio.mute()?'♪̸':'♫';el('sound').setAttribute('aria-label',audio.muted?'Unmute soundtrack':'Mute soundtrack');el('sound').setAttribute('aria-pressed',String(audio.muted));}
 app.addEventListener('pointerdown',event=>{if(mode==='start'&&!event.target.closest('button'))start();});el('sound').onclick=mute;el('pause').onclick=pause;el('help').onclick=help;
+el('undo').addEventListener('click',undo);
 el('orb-send').addEventListener('pointerdown',event=>{event.preventDefault();dispatch();});
 el('orb-send').addEventListener('click',event=>{if(event.detail===0)dispatch();});
 for(const direction of ['up','left','right','down'])el(direction).addEventListener('pointerdown',event=>{event.preventDefault();turn(direction);});
@@ -304,7 +316,7 @@ window.addEventListener('keydown',event=>{
   if(directions[event.key.length===1?event.key.toLowerCase():event.key])turn(directions[event.key.length===1?event.key.toLowerCase():event.key]);
   if(event.key==='Enter'&&mode==='start')start();
   if(event.key===' '){if(['start','over'].includes(mode))start();else if(mode==='paused')resume();else dispatch();}
-  if(event.key==='Backspace')recall();
+  if(event.key==='Backspace')undo();
   if(event.key==='Escape'){if(el('close-help')&&!el('modal').classList.contains('hidden'))el('close-help').click();else pause();}if(event.key==='m'||event.key==='M')mute();
 });
 // Trap modal focus so keyboard play and pause stay predictable.
@@ -408,7 +420,7 @@ function checkScroll(dt){
 engine.runRenderLoop(()=>{const dt=Math.min(engine.getDeltaTime()/1000,.05);update(dt);if(mode==='playing')updateCourseView(dt);scene.updateTransformMatrix();checkScroll(dt);updateBoardLabels();updateLevelEffects(dt);comboEffects.update(dt,{camera,mode});boardLights.update(dt,{scrollZ,mode,currentIndex:current,platforms:platforms.filter(p=>p.stop).map(p=>({...p.stop,height:p.root.position.y,visible:p.root.isEnabled()}))});updateOrb(mode==='playing'?dt:0);scene.render();});
 scene.executeWhenReady(()=>{visible('loading',false);});
 document.fonts.ready.then(fitBoardCamera);
-const state=()=>({mode,phase,selected,draft:[...premoves.draft],draftHeading:0,locked:premoves.locked,moveIndex,orb:{...orbScreen,location:'ui'},options:course.options.map(p=>({...p})),target:course.options[0]?.move,jump:landings+1,score,combo,comboPower,captures,landings,lastLanding,runTime,lossReason,progression:progression(landings),scrollSpeed,scrollGraceUntil,levelClear:{elapsed:clearTime,completedLevel:clearedLevel},finish:levelEffects.state,comboEffects:comboEffects.state,boardLights:boardLights.state,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},airtime:jumpTime/airDuration,jumpDuration:airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,track:audio.track.file,speed:audio.track.speed,time:audio.music.currentTime,playing:!audio.music.paused,musicGain:audio.musicGain?.gain.value,cue:audio.cue},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{endless:true,cols:GRID_COLS,rows:GRID_ROWS,firstRow,retainedStops:course.stops.length,previewDepth:previewDepth(progression(landings).level,current,course.seed)},arena:{...arena},heading:0,launch:{x:course.at(current).x*CELL_SIZE,z:course.at(current).z*CELL_SIZE},landing:{x:chosenCell().x*CELL_SIZE,z:chosenCell().z*CELL_SIZE},render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},platforms:platforms.filter(p=>p.index!==null).map(p=>({id:p.index,index:p.stop.index,route:!!p.stop.route,preview:!!p.stop.preview,origin:p.stop.origin,stage:p.stage,piece:p.stop.piece,bonus:p.stop.bonus,height:p.root.position.y,visible:p.root.isEnabled(),x:p.stop.x*CELL_SIZE,z:p.stop.z*CELL_SIZE})),landingDwell:LANDING_DWELL,moveQueue:premoves.groups.map(g=>({...g})),camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,trick:{yaw:trick.rotation.y,roll:trick.rotation.z,pitch:trick.rotation.x},platformTop:PLATFORM_TOP,glow:glow.intensity,sparkles:jumpSparkles.getActiveCount()});
+const state=()=>({mode,phase,selected,draft:[...premoves.draft],draftHeading:0,locked:premoves.locked,moveIndex,orb:{...orbScreen,location:'ui'},options:course.options.map(p=>({...p})),target:course.options[0]?.move,jump:landings+1,score,combo,comboPower,captures,landings,lastLanding,runTime,lossReason,progression:progression(landings),scrollSpeed,scrollGraceUntil,levelClear:{elapsed:clearTime,completedLevel:clearedLevel},finish:levelEffects.state,comboEffects:comboEffects.state,boardLights:boardLights.state,position:{x:knight.position.x,y:knight.position.y,z:knight.position.z},airtime:jumpTime/airDuration,jumpDuration:airDuration,audio:{state:audio.ctx?.state,muted:audio.muted,track:audio.track.file,speed:audio.track.speed,time:audio.music.currentTime,playing:!audio.music.paused,musicGain:audio.musicGain?.gain.value,cue:audio.cue},fps:Math.round(engine.getFps()),meshes:scene.meshes.length,cellSize:CELL_SIZE,board:{endless:true,cols:GRID_COLS,visualCols:VISUAL_COLS,fullScreen:innerWidth<700||(innerHeight<550&&innerWidth>innerHeight),rows:GRID_ROWS,firstRow,retainedStops:course.stops.length,previewDepth:previewDepth(progression(landings).level,current,course.seed)},arena:{...arena},heading:0,launch:{x:course.at(current).x*CELL_SIZE,z:course.at(current).z*CELL_SIZE},landing:{x:chosenCell().x*CELL_SIZE,z:chosenCell().z*CELL_SIZE},render:{width:engine.getRenderWidth(),height:engine.getRenderHeight()},platforms:platforms.filter(p=>p.index!==null).map(p=>({slot:platforms.indexOf(p),age:p.age,id:p.index,index:p.stop.index,route:!!p.stop.route,preview:!!p.stop.preview,origin:p.stop.origin,stage:p.stage,piece:p.stop.piece,bonus:p.stop.bonus,height:p.root.position.y,visible:p.root.isEnabled(),x:p.stop.x*CELL_SIZE,z:p.stop.z*CELL_SIZE})),landingDwell:LANDING_DWELL,moveQueue:premoves.groups.map(g=>({...g})),camera:{x:camera.position.x,y:camera.position.y,z:camera.position.z,rotation:{x:camera.rotation.x,y:camera.rotation.y,z:camera.rotation.z},orthographic:camera.mode===Camera.ORTHOGRAPHIC_CAMERA},knightYaw:spinner.rotation.y,trick:{yaw:trick.rotation.y,roll:trick.rotation.z,pitch:trick.rotation.x},platformTop:PLATFORM_TOP,glow:glow.intensity,sparkles:jumpSparkles.getActiveCount()});
 // Observability for playtesting; actions are the same as keyboard and touch.
 window.knightwave={state,start,turn,dispatch,recall,pause,resume,mute,engine,scene};
 if(document.modelContext?.registerTool){

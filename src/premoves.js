@@ -24,6 +24,10 @@ export class Premoves {
   }
   begin(){if(this.locked||!this.groups.length)return null;this.locked=true;return this.groups[0];}
   complete(){if(!this.locked)return null;const group=this.groups.shift();this.completed++;this.locked=false;return group;}
+  undo(){
+    if(this.draft.length){const direction=this.draft.pop();return {direction};}
+    return this.recall();
+  }
   recall(){
     if(this.draft.length){this.draft=[];return {cleared:true};}
     if(this.groups.length<=(this.locked?1:0))return null;
