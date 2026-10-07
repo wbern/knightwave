@@ -10,7 +10,8 @@
     "check:browser": "node visualcheck.mjs",
     "check:mobile": "node mobilecheck.mjs",
     "check:smoke": "node verify.mjs",
-    "check:audio": "node audiocheck.mjs"
+    "check:audio": "node audiocheck.mjs",
+    "check:levels": "node levelcheck.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.0.0"

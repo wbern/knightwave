@@ -3,20 +3,28 @@ export function perpendicular(first,second){
   const a=DIRECTIONS[first],b=DIRECTIONS[second];
   return !!a&&!!b&&a.x*b.x+a.z*b.z===0;
 }
-// Inputs preserve their order: the first direction travels two squares.
+// Three square-direction presses make a knight move in any ordering.
+// The repeated direction is canonicalised to the long leg for flight/icons.
+export function moveFromSteps(steps){
+ if(!Array.isArray(steps)||steps.length!==3||steps.some(step=>!DIRECTIONS[step]))return null;
+ const counts=new Map();for(const step of steps)counts.set(step,(counts.get(step)||0)+1);
+ const first=[...counts].find(([,count])=>count===2)?.[0],second=[...counts].find(([,count])=>count===1)?.[0];
+ return first&&perpendicular(first,second)?{first,second}:null;
+}
 export function normalizeMoves(input){
-  if(input?.moves)return normalizeMoves(input.moves);
-  if(input?.first)return perpendicular(input.first,input.second)?[{first:input.first,second:input.second}]:[];
-  if(!Array.isArray(input))return [];
-  if(typeof input[0]==='string'){
-    const moves=[];
-    for(let i=0;i+1<input.length;i+=2){
-      if(!perpendicular(input[i],input[i+1]))throw new TypeError('Knight directions must be perpendicular');
-      moves.push({first:input[i],second:input[i+1]});
-    }
-    return moves;
+ if(input?.moves)return normalizeMoves(input.moves);
+ if(input?.first)return perpendicular(input.first,input.second)?[{first:input.first,second:input.second}]:[];
+ if(!Array.isArray(input))return [];
+ if(typeof input[0]==='string'){
+  const moves=[];
+  for(let i=0;i+2<input.length;i+=3){
+   const move=moveFromSteps(input.slice(i,i+3));
+   if(!move)throw new TypeError('Knight moves need two presses in one direction and one perpendicular press');
+   moves.push(move);
   }
-  return input.flatMap(move=>normalizeMoves(move));
+  return moves;
+ }
+ return input.flatMap(move=>normalizeMoves(move));
 }
 export function knightPath(input){
   const path=[{x:0,z:0}];let x=0,z=0;

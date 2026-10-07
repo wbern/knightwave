@@ -16,8 +16,8 @@ test('icon orientation mirrors and rotates both ordered legs of all eight possib
   assert.ok(moveGlyphs(move).includes(`${first} two, ${second} one`));
  }
 });
-test('draft icons include a partial first direction without presenting it as a complete knight move',()=>{
- const html=moveGlyphs(['up','left','right']);assert.ok(html.includes('up two, left one'));
- assert.ok(html.includes('partial-move'));assert.ok(html.includes('right; choose a perpendicular direction'));
+test('draft icons include a partial square directions without presenting it as a complete knight move',()=>{
+ const html=moveGlyphs(['up','up','left','right','right']);assert.ok(html.includes('up two, left one'));
+ assert.ok(html.includes('partial-move'));assert.ok(html.includes('right; one square entered'));
  assert.equal(moveGlyphs([]),'');
 });

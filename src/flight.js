@@ -1,31 +1,32 @@
-import {knightPath,normalizeMoves,knightDestination} from './rules.js';
+import {DIRECTIONS,normalizeMoves,knightDestination} from './rules.js';
 
 const cache=new Map();
 const mix=(a,b,t)=>({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});
 const length=(a,b)=>Math.hypot(b.x-a.x,b.z-a.z);
-const smooth=t=>t*t*t*(t*(t*6-15)+10);
+const clamp=t=>Math.max(0,Math.min(1,t));
 
-// Round only the airborne corners. The logical L moves and landing squares
-// stay exact; distance along the rounded curve sets a steady travel speed.
+// Ordered takeoff and landing directions shape a single curved trick jump.
+// Distance along the curve keeps travel quick and evenly paced.
 function route(steps){
-  const moves=normalizeMoves(steps),key=moves.map(move=>`${move.first}:${move.second}`).join(',');
+  const moves=normalizeMoves(steps);
+  const entered=Array.isArray(steps)&&typeof steps[0]==='string'?steps:null;
+  const routes=moves.map((move,i)=>({move,steps:steps?.steps||move.steps||entered?.slice(i*3,i*3+3)||[move.first,move.first,move.second]}));
+  const key=routes.map(r=>r.steps.join(':')).join(',');
   if(cache.has(key))return cache.get(key);
-  const path=moves.length?knightPath(moves):[{x:0,z:0},{x:0,z:3}];
-  const points=[path[0]];
-  const line=end=>{
-    const start=points.at(-1),count=Math.max(1,Math.ceil(length(start,end)*40));
-    for(let i=1;i<=count;i++)points.push(mix(start,end,i/count));
-  };
-  for(let i=1;i<path.length-1;i++){
-    const before=path[i-1],corner=path[i],after=path[i+1],radius=.28;
-    const entry=mix(corner,before,radius/length(corner,before));
-    const exit=mix(corner,after,radius/length(corner,after));
-    line(entry);
-    for(let j=1;j<=32;j++){
-      const t=j/32;points.push(mix(mix(entry,corner,t),mix(corner,exit,t),t));
+  const points=[{x:0,z:0}];
+  for(const {move,steps:input} of routes){
+    const start=points.at(-1),delta=knightDestination(move),end={x:start.x+delta.x,z:start.z+delta.z};
+    const first=DIRECTIONS[input[0]],last=DIRECTIONS[input[2]],handle=1.25;
+    const a={x:start.x+first.x*handle,z:start.z+first.z*handle};
+    const b={x:end.x-last.x*handle,z:end.z-last.z*handle};
+    // Fly along one flowing arc. Its takeoff and landing tangents preserve
+    // the first and last presses instead of reordering the player's inputs.
+    for(let i=1;i<=200;i++){
+      const t=i/200,u=1-t;
+      points.push({x:u*u*u*start.x+3*u*u*t*a.x+3*u*t*t*b.x+t*t*t*end.x,z:u*u*u*start.z+3*u*u*t*a.z+3*u*t*t*b.z+t*t*t*end.z});
     }
   }
-  line(path.at(-1));
+  if(points.length===1)points.push({x:0,z:3});
   let distance=0,heading=0;
   const samples=points.map((p,i)=>{
     if(i)distance+=length(points[i-1],p);
@@ -45,13 +46,33 @@ export function flightPose(steps,progress){
   return {...mix(a,b,t),heading:a.heading+(b.heading-a.heading)*t};
 }
 
-// A centered model pivot gives the knight a shuv-it and, for chained moves,
-// a barrel roll. Finish before touchdown so the landing direction reads.
-export function trickPose(steps,progress){
-  const t=Math.max(0,Math.min(1,(progress-.12)/.72)),ease=smooth(t);
-  if(t===0)return {yaw:0,roll:0,pitch:0};
-  const moves=normalizeMoves(steps),direction=Math.sign(knightDestination(moves).x)||1,count=moves.length;
-  return {yaw:direction*2*Math.PI*(count>=3?2:1)*ease,
-    roll:count>=2?direction*2*Math.PI*ease:0,
-    pitch:Math.sin(Math.PI*t)*-.16};
+// A brief loaded stance, an impulse-driven rise, and a heavier fall.
+export const JUMP_HEIGHT=2.4;
+export const TAKEOFF_FRACTION=.08;
+export const APEX_FRACTION=.55;
+export function hopProgress(progress){return clamp((progress-TAKEOFF_FRACTION)/(1-TAKEOFF_FRACTION));}
+export function jumpLift(progress){
+ const t=hopProgress(progress);
+ if(t<=APEX_FRACTION){const u=t/APEX_FRACTION;return JUMP_HEIGHT*(2*u-u*u);}
+ const u=(t-APEX_FRACTION)/(1-APEX_FRACTION);return JUMP_HEIGHT*(1-u*u);
+}
+
+// Keep the piece upright: lean into its travel instead of somersaulting.
+export function trickPose(steps,progress,power=1){
+ const t=hopProgress(progress),envelope=Math.sin(Math.PI*t);
+ if(t===0||t===1)return {yaw:0,roll:0,pitch:0};
+ const delta=knightDestination(steps),distance=Math.hypot(delta.x,delta.z)||1;
+ const lean=.13+Math.min(3,Math.max(0,power-1))*.018;
+ return {yaw:0,roll:-delta.x/distance*lean*envelope,pitch:delta.z/distance*lean*envelope};
+}
+
+// Volume-preserving squash/stretch makes launch and contact read as a hop.
+export function hopShape(progress){
+ const t=clamp(progress),air=hopProgress(t);
+ const height=t<TAKEOFF_FRACTION?1-.16*Math.sin(Math.PI*t/TAKEOFF_FRACTION):1+.12*Math.sin(2*Math.PI*air)*Math.exp(-air*2);
+ return {height,width:1/Math.sqrt(height)};
+}
+export function landingShape(seconds){
+ const age=Math.max(0,seconds),height=age>=.16?1:1-.18*Math.exp(-age*24)*Math.cos(age*42);
+ return {height,width:1/Math.sqrt(height)};
 }

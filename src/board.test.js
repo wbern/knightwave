@@ -15,7 +15,7 @@ test('each fork has two legal choices inside the eight-file strip with a safe fo
   }
   course.advance(options[0]);assert.ok(course.platforms.length<=5);
  }
- assert.ok(course.current.z>3000);
+ assert.ok(course.current.z>2000);
 });
 test('chosen branches drive the next fork and previewing future cells does not change generation',()=>{
  const a=new EndlessCourse(),b=new EndlessCourse();
@@ -61,7 +61,7 @@ test('queued groups execute both predicted branches through captures and level c
   let origin=course.current;const expected=[];
   for(let i=0;i<4;i++){
    const option=course.previewOptions(origin)[(batch+i)%2];
-   assert.equal(queue.edit(option.move.first),true);assert.equal(queue.edit(option.move.second),true);
+   assert.equal(queue.edit(option.move.first),true);assert.equal(queue.edit(option.move.first),true);assert.equal(queue.edit(option.move.second),true);
    expected.push(option);origin=option;
   }
   const group=queue.dispatch();assert.ok(group);assert.equal(queue.draft.length,0);queue.begin();
@@ -77,5 +77,26 @@ test('queued groups execute both predicted branches through captures and level c
   queue.complete();assert.equal(queue.groups.length,0);
  }
  assert.equal(course.current.index,120);assert.equal(captures,20);assert.equal(empty,100);
- assert.equal(scroll.state.level,9);assert.equal(scroll.state.progress,4);assert.equal(scroll.state.speed,8.4);
+ assert.equal(scroll.state.level,9);assert.equal(scroll.state.progress,4);assert.equal(scroll.state.speed,4.5);
+});
+
+test('both finish-fork choices cross forward through the level goal',()=>{
+ const course=new EndlessCourse();
+ for(let i=0;i<120;i++){
+  const options=course.options;
+  if([10,22,35,49,64,80,97,115].includes(i))assert.ok(options.every(p=>p.z>course.current.z));
+  course.advance(options[i%2]);
+ }
+});
+
+test('opening paths are gentle forward staircases and higher levels add tighter bends',()=>{
+ const course=new EndlessCourse();let tightEarly=0,tightLate=0,lateCount=0;
+ for(let index=0;index<500;index++){
+  const origin=course.current,choice=course.options[0],delta=knightDestination(choice.move);
+  assert.ok(delta.z>0);
+  if(index<11){if(delta.z===1)tightEarly++;assert.ok(course.options.every(p=>p.z>origin.z));}
+  if(index>=100){lateCount++;if(delta.z===1)tightLate++;}
+  course.advance(choice);
+ }
+ assert.equal(tightEarly,0);assert.ok(tightLate/lateCount>.5);
 });

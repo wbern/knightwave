@@ -18,9 +18,10 @@ export function moveGlyph(move){
 export function directionGlyph(direction){
   if(!DIRECTIONS[direction])return '';
   const rotation={up:0,right:90,down:180,left:270}[direction];
-  return `<svg class="move-icon partial-move" viewBox="0 0 64 64" role="img" aria-label="${direction}; choose a perpendicular direction"><g transform="rotate(${rotation} 32 32)"><path d="M32 49V16m-9 9 9-9 9 9" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4"/><circle cx="32" cy="49" r="4" fill="currentColor"/></g></svg>`;
+  return `<svg class="move-icon partial-move" viewBox="0 0 64 64" role="img" aria-label="${direction}; one square entered"><g transform="rotate(${rotation} 32 32)"><path d="M32 49V16m-9 9 9-9 9 9" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4"/><circle cx="32" cy="49" r="4" fill="currentColor"/></g></svg>`;
 }
 export function moveGlyphs(input){
   const complete=moveSequence(input).map(moveGlyph).join('');
-  return complete+(Array.isArray(input)&&typeof input[0]==='string'&&input.length%2?directionGlyph(input.at(-1)):'');
+  const partial=Array.isArray(input)&&typeof input[0]==='string'?input.length%3:0;
+  return complete+(partial?input.slice(-partial).map(directionGlyph).join(''):'');
 }

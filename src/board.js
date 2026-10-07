@@ -1,3 +1,4 @@
+import {progression} from './progression.js';
 import {knightDestination} from './rules.js';
 export const BOARD_MIN=-4,BOARD_MAX=3,BOARD_CELLS=8,BOARD_CENTER=-.5,CELL_SIZE=4;
 export const GRID_COLS=8,GRID_ROWS=24;
@@ -37,12 +38,22 @@ export class EndlessCourse{
   }).filter(p=>p.x>=BOARD_MIN&&p.x<=BOARD_MAX);
   const forward=candidates.filter(p=>p.delta.z>0);
   const longForward=forward.filter(p=>p.delta.z===2);
-  const safe=longForward.length?longForward[random%longForward.length]:forward[random%forward.length];
+  const level=progression(index),finalLanding=level.progress===level.total-1;
+  const shortForward=forward.filter(p=>p.delta.z===1);
+  const bendChance=Math.min(.8,(level.level-1)*.1);
+  let safePool=shortForward.length&&random%100<bendChance*100?shortForward:longForward;
+  if(!safePool.length)safePool=forward;
+  const previousSide=origin.move?Math.sign(knightDestination(origin.move).x):0;
+  const desiredSide=level.level>=4&&((random>>>8)%100)<75?-previousSide:previousSide;
+  const continuing=safePool.filter(p=>Math.sign(p.delta.x)===desiredSide);
+  if(continuing.length)safePool=continuing;
+  const safe=safePool[random%safePool.length];
   const occupied=index%3===2;
-  // Captures occasionally ask for a sideways or backwards detour; the other
-  // platform always offers a forward route to stay ahead of the scrolling.
+  // Early forks are gentle forward staircases. Later capture detours and
+  // tighter zigzags add difficulty while the main route always leads upward.
   const detours=candidates.filter(p=>p!==safe&&p.delta.z<=1);
-  const otherPool=occupied&&index%2===0?detours:forward.filter(p=>p!==safe);
+  const simpleAlternatives=longForward.filter(p=>p!==safe);
+  const otherPool=occupied&&level.level>=4&&index%2===0&&!finalLanding?detours:level.level===1&&simpleAlternatives.length?simpleAlternatives:forward.filter(p=>p!==safe);
   const other=otherPool[random%otherPool.length];
   const reward=pieces[Math.floor(index/3)%pieces.length];
   return [safe,other].map((p,i)=>({
