@@ -1,7 +1,7 @@
 export const FIRST_LEVEL_LANDINGS=11;
 export const SCROLL_GRACE_SECONDS=3;
 export const DIFFICULTIES=[
- {name:'Easy',musicSpeed:.50,speed:3.2},
+ {name:'Easy',musicSpeed:.50,speed:1.6},
  {name:'Intermediate',musicSpeed:1,speed:3.85},
  {name:'Advanced',musicSpeed:1.26,speed:4.5},
  {name:'Expert',musicSpeed:1.50,speed:5.15},
