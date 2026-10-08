@@ -90,6 +90,7 @@ const levelEffects=new LevelEffects(scene,{glow,ui:el('ui'),cellSize:CELL_SIZE,b
 const boardLights=new BoardLights(scene,{boardMin:BOARD_MIN,boardMax:BOARD_MAX,cellSize:CELL_SIZE,platformTop:PLATFORM_TOP});
 const comboEffects=new ComboEffects(scene,{ui:el('ui'),platformTop:PLATFORM_TOP});
 let clearTime=0,clearedLevel=null,pausedMode='playing',scrollGraceUntil=SCROLL_GRACE,comboPower=1;
+let scrollTarget=-Infinity,finishLine=null;
 let orbKick=0,sendFlash=0,orbScreen={x:0,y:0},gesture=null,progressElement=null;
 let mode='start',phase='waiting',current=0,selected=null,moveIndex=0,captures=0,scrollSpeed=0,lossReason='',jumpTime=0,phaseTime=0,runTime=0,score=0,combo=0,landings=0,spinJuice=0,airDuration=1.25,tapKick=0,lastGuideKey='',lastLanding=null;
 const GROUND=PLATFORM_TOP+.06;
@@ -190,7 +191,8 @@ function updateCourseView(dt,reset=false){
   else if(mode==='playing'){
     scrollSpeed+=(progression(landings).speed-scrollSpeed)*(1-Math.exp(-dt*2));
     scrollZ+=scrollSpeed*(Math.max(0,runTime-scrollGraceUntil)-Math.max(0,runTime-dt-scrollGraceUntil));
-    // Only elapsed time advances the view; the knight never pulls the camera.
+    // Elapsed time drives the view; a jump near the top edge eases it ahead so takeoff is never delayed.
+    if(scrollTarget>scrollZ)scrollZ+=(scrollTarget-scrollZ)*(1-Math.exp(-dt*14));
   }
   camera.position.set(boardCenter,68,scrollZ-42);camera.setTarget(new Vector3(boardCenter,0,scrollZ));
   sun.position.z=scrollZ-18;scenery.position.z=scrollZ-16;
@@ -210,7 +212,7 @@ function updateBoardLabels(){
 function visible(id,on){el(id).classList.toggle('hidden',!on);}
 function setMode(next){mode=next;el('ui').className=mode==='start'?'start-mode':'playing-mode';visible('start-screen',mode==='start');visible('pause',['playing','paused','level-clear'].includes(mode));visible('run-label',mode!=='start');visible('controls-dock',mode==='playing'||mode==='paused');visible('scroll-seam',mode==='playing'||mode==='paused');visible('move-queue',mode==='playing'||mode==='paused');visible('orb-send',mode==='playing'||mode==='paused');visible('gesture-caption',false);visible('combo-display',mode==='playing'&&comboPower>1);}
 function start(){
-  levelEffects.reset();comboEffects.reset();boardLights.reset();comboPower=1;clearTime=0;clearedLevel=null;scrollGraceUntil=SCROLL_GRACE;pausedMode='playing';
+  levelEffects.reset();comboEffects.reset();boardLights.reset();comboPower=1;scrollTarget=-Infinity;finishLine=null;clearTime=0;clearedLevel=null;scrollGraceUntil=SCROLL_GRACE;pausedMode='playing';
   course.reset();premoves.reset();orbKick=0;sendFlash=0;gesture=null;current=0;captures=0;moveIndex=0;scrollSpeed=progression(0).speed;lossReason='';lastLanding=null;selected=null;score=0;combo=0;landings=0;runTime=0;jumpTime=0;phaseTime=0;phase='waiting';trick.rotation.set(0,0,0);
   spinner.rotation.set(0,FORWARD_YAW,0);knight.scaling.setAll(1.38);tapKick=0;jumpSparkles.reset();jumpSparkles.start();airDuration=1.25;knight.position.copyFrom(worldCell(course.at(0)));
   scrollZ=3;el('score').textContent='00000';visible('modal',false);setMode('playing');audio.setLevel(1,{reset:true});audio.start().catch(()=>{});lastGuideKey='';updateGuides();updatePlatforms(0,true);fitBoardCamera();updateOrb(0);
@@ -250,7 +252,8 @@ function beginJump(){
     const target=Vector3.Project(new Vector3(cell.x*CELL_SIZE,GROUND,cell.z*CELL_SIZE),Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(innerWidth,innerHeight));
     const pixelsPerUnit=innerWidth/(camera.orthoRight-camera.orthoLeft);
     const flightClearance=(JUMP_HEIGHT+4.7)*Math.cos(camera.rotation.x)*pixelsPerUnit+22;
-    if(target.y<arena.top+Math.max(60,flightClearance))return false;
+    const shortfall=arena.top+Math.max(60,flightClearance)-target.y;
+    if(shortfall>0)scrollTarget=Math.max(scrollTarget,scrollZ+shortfall/(pixelsPerUnit*Math.sin(camera.rotation.x)));
   }
   const group=premoves.locked?pending:premoves.begin();if(!group)return false;
   selected={...group.moves[moveIndex],steps:group.inputs.slice(moveIndex*3,moveIndex*3+3)};comboPower=group.moves.length;phase='air';jumpTime=0;airDuration=jumpDuration(progression(landings).level,comboPower);
@@ -387,7 +390,7 @@ function clearLevel(completedLevel){
 }
 function nextLevel(){
   levelEffects.hideClear();levelEffects.setFinish(null);clearTime=0;clearedLevel=null;
-  scrollZ=knight.position.z+2;scrollGraceUntil=runTime+1.5;
+  scrollZ=knight.position.z+2;scrollTarget=-Infinity;scrollGraceUntil=runTime+1.5;
   scrollSpeed=progression(landings).speed;phase='settle';phaseTime=0;
   setMode('playing');audio.setLevel(progression(landings).level,{reset:true});audio.start().catch(()=>{});
   updateCourseView(0);updatePlatforms(0);lastGuideKey='';updateGuides();
@@ -399,7 +402,11 @@ function updateLevelEffects(dt){
     if(remaining<=3){
       let origin=course.current,options=course.options;
       for(let i=1;i<remaining;i++){origin=options[0];options=course.previewOptions(origin,origin.index);}
-      levelEffects.setFinish({z:(Math.min(...options.map(p=>p.z))-.55)*CELL_SIZE,remaining,level:level.level,options:options.map(p=>({...p,x:p.x*CELL_SIZE,z:p.z*CELL_SIZE}))});
+      // The line stays put once shown; it only moves if the chosen route can no longer cross it.
+      const crossable=finishLine?.level===level.level&&course.current.z<finishLine.row&&options.some(p=>p.z>finishLine.row);
+      if(!crossable)finishLine={level:level.level,row:Math.min(...options.map(p=>p.z))-.55,end:-Infinity};
+      finishLine.end=Math.max(finishLine.end,(finishLine.row+1)*CELL_SIZE,...options.map(p=>(p.z+.5)*CELL_SIZE));
+      levelEffects.setFinish({z:finishLine.row*CELL_SIZE,endZ:finishLine.end,remaining,level:level.level,options:options.map(p=>({...p,x:p.x*CELL_SIZE,z:p.z*CELL_SIZE}))});
     }else levelEffects.setFinish(null);
   }
   levelEffects.update(mode==='paused'?0:dt,{camera,arena,mode});

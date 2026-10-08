@@ -22,7 +22,7 @@ export async function runBrowserChecks(selectedLayouts=layouts){
      const current=window.knightwave.state(),previous=window.audit.previous;window.audit.frames++;
      if(previous.mode==='playing'&&current.mode==='playing'){
       const expected=current.scrollSpeed*(Math.max(0,current.runTime-current.scrollGraceUntil)-Math.max(0,previous.runTime-current.scrollGraceUntil));
-      if(Math.abs(current.camera.z-previous.camera.z-expected)>1e-5)window.audit.camera.push({current,previous,expected});
+      if(current.camera.z-previous.camera.z-expected< -1e-5)window.audit.camera.push({current,previous,expected});
      }
      if(current.mode==='playing'&&current.phase!=='fall'){
       const game=window.knightwave,camera=game.scene.activeCamera,V=camera.position.constructor,identity=game.scene.meshes[0].getWorldMatrix().constructor.Identity(),viewport=camera.viewport.toGlobal(innerWidth,innerHeight);
